@@ -1,72 +1,75 @@
-import { NavLink, Outlet } from 'react-router-dom';
-import { ClipboardList, LogOut, Users } from 'lucide-react';
-import { useAuth } from '@/auth/AuthContext';
-import { Button } from '@/components/ui/button';
-import { roleLabel } from '@/lib/format';
-import { cn } from '@/lib/utils';
+import { Suspense, type ReactNode } from "react";
+import { NavLink, Outlet } from "react-router-dom";
+import { useAuth } from "@/auth/AuthContext";
+import { LogOutIcon } from "@/components/icons";
+import { PageSpinner } from "@/components/PageSpinner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ROLE_LABEL, type Role } from "@/lib/hrdApi";
+import { cn } from "@/lib/utils";
 
-const ADMIN_NAV = [
-  { to: '/admin/karyawan', label: 'Karyawan', icon: Users },
-  { to: '/admin/absensi', label: 'Absensi', icon: ClipboardList },
-];
+const NAV_ITEMS: Record<Role, { to: string; label: string }[]> = {
+  EMPLOYEE: [{ to: "/absensi", label: "Absensi" }],
+  ADMIN_HRD: [
+    { to: "/hrd/employees", label: "Master karyawan" },
+    { to: "/hrd/monitoring", label: "Monitoring absensi" },
+  ],
+};
 
-export function AppShell() {
+export function AppShell({ children }: { children?: ReactNode }) {
   const { user, logout } = useAuth();
-  if (!user) return null;
+  const items = user ? NAV_ITEMS[user.role] : [];
 
   return (
-    <div className="min-h-dvh">
+    <div className="min-h-screen bg-canvas text-ink">
       <a
-        href="#konten"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:text-sm"
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-card focus:px-3 focus:py-2"
       >
         Lewati ke konten
       </a>
 
       <header className="border-b border-line bg-card">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-6">
-            <span className="font-display text-xl leading-none">Absensi WFH</span>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="flex min-h-14 items-center justify-between gap-4 py-2">
+            <span className="font-display text-lg font-semibold tracking-tight">Absensi WFH</span>
 
-            {user.role === 'ADMIN_HRD' && (
-              <nav aria-label="Navigasi utama" className="flex items-center gap-1">
-                {ADMIN_NAV.map(({ to, label, icon: Icon }) => (
-                  <NavLink
-                    key={to}
-                    to={to}
-                    className={({ isActive }) =>
-                      cn(
-                        'inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors cursor-pointer active:scale-[0.98]',
-                        isActive
-                          ? 'bg-accent-soft text-accent-ink font-semibold'
-                          : 'text-muted hover:bg-line/60 hover:text-ink active:bg-line/80',
-                      )
-                    }
-                  >
-                    <Icon className="size-4" aria-hidden />
-                    {label}
-                  </NavLink>
-                ))}
-              </nav>
+            {user && (
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-end leading-tight sm:flex-row sm:items-center sm:gap-2">
+                  <span className="max-w-[9rem] truncate text-sm font-medium sm:max-w-[16rem]">{user.fullName}</span>
+                  <Badge variant="neutral">{ROLE_LABEL[user.role]}</Badge>
+                </div>
+                <Button variant="secondary" size="sm" onClick={logout} className="min-h-11 sm:min-h-0">
+                  <LogOutIcon className="h-4 w-4" />
+                  <span className="hidden sm:inline">Keluar</span>
+                  <span className="sr-only sm:hidden">Keluar</span>
+                </Button>
+              </div>
             )}
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="hidden text-right sm:block">
-              <p className="text-sm font-medium leading-tight">{user.fullName}</p>
-              <p className="text-xs text-muted">{roleLabel(user.role)}</p>
-            </div>
-            <Button variant="secondary" size="sm" onClick={logout}>
-              <LogOut />
-              <span className="hidden sm:inline">Keluar</span>
-              <span className="sr-only sm:hidden">Keluar</span>
-            </Button>
-          </div>
+          <nav aria-label="Navigasi utama" className="-mx-1 flex gap-1 overflow-x-auto pb-2">
+            {items.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  cn(
+                    "inline-flex min-h-11 items-center whitespace-nowrap rounded-md px-3 text-sm transition-colors",
+                    isActive ? "bg-accent-soft font-medium text-accent-ink" : "text-muted hover:text-ink",
+                  )
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
         </div>
       </header>
 
-      <main id="konten" className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        <Outlet />
+      <main id="main" className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+        <Suspense fallback={<PageSpinner />}>{children ?? <Outlet />}</Suspense>
       </main>
     </div>
   );

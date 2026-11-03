@@ -1,29 +1,27 @@
-import axios from 'axios';
+import axios, { type AxiosError } from "axios";
 
-export const TOKEN_KEY = 'absensi.token';
-export const AUTH_EXPIRED_EVENT = 'auth:expired';
+export const TOKEN_KEY = "absensi.token";
+export const AUTH_EXPIRED_EVENT = "auth:expired";
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api',
-  timeout: 30000,
+  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:3000/api",
+  timeout: 30_000,
 });
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    config.headers.set("Authorization", `Bearer ${token}`);
   }
   return config;
 });
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (
-      axios.isAxiosError(error) &&
-      error.response?.status === 401 &&
-      !error.config?.url?.includes('/auth/login')
-    ) {
+  (error: AxiosError) => {
+    const status = error.response?.status;
+    const url = error.config?.url ?? "";
+    if (status === 401 && !url.includes("/auth/login")) {
       localStorage.removeItem(TOKEN_KEY);
       window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
     }
@@ -31,3 +29,4 @@ api.interceptors.response.use(
   },
 );
 
+export default api;

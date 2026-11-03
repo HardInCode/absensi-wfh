@@ -6,47 +6,51 @@ import {
   useMemo,
   useState,
   type ReactNode,
-} from 'react';
-import { api, AUTH_EXPIRED_EVENT, TOKEN_KEY } from '@/lib/api';
-import type { Employee, LoginResponse } from '@/lib/types';
+} from "react";
+import axios from "axios";
+import { api, AUTH_EXPIRED_EVENT, TOKEN_KEY } from "@/lib/api";
+import { normalizeEmployee, pickStr, type Employee } from "@/lib/hrdApi";
 
-interface AuthState {
-  user: Employee | null;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<Employee>;
+export type AuthUser = Employee;
+
+interface AuthContextValue {
+  user: AuthUser | null;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => void;
 }
 
-const AuthContext = createContext<AuthState | null>(null);
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+function parseMe(data: unknown): AuthUser {
+  const root = typeof data === "object" && data !== null ? (data as Record<string, unknown>) : {};
+  return normalizeEmployee(root.user ?? root);
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<Employee | null>(null);
-  const [loading, setLoading] = useState<boolean>(() => !!localStorage.getItem(TOKEN_KEY));
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(() => Boolean(localStorage.getItem(TOKEN_KEY)));
 
-  // Pulihkan sesi dari token yang tersimpan.
   useEffect(() => {
     if (!localStorage.getItem(TOKEN_KEY)) {
-      setLoading(false);
+      setIsLoading(false);
       return;
     }
-    let cancelled = false;
+    const controller = new AbortController();
     api
-      .get<Employee>('/auth/me')
-      .then(({ data }) => {
-        if (!cancelled) setUser(data);
-      })
-      .catch(() => {
+      .get("/auth/me", { signal: controller.signal })
+      .then((res) => setUser(parseMe(res.data)))
+      .catch((error: unknown) => {
+        if (axios.isCancel(error)) return;
         localStorage.removeItem(TOKEN_KEY);
+        setUser(null);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, []);
 
-  // Token kedaluwarsa / ditolak server.
   useEffect(() => {
     const onExpired = () => setUser(null);
     window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
@@ -54,10 +58,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const { data } = await api.post<LoginResponse>('/auth/login', { email, password });
-    localStorage.setItem(TOKEN_KEY, data.accessToken);
-    setUser(data.user);
-    return data.user;
+    const res = await api.post("/auth/login", { email, password });
+    const token = pickStr(res.data, "accessToken", "access_token", "token");
+    if (!token) throw new Error("Respons login tidak berisi token.");
+    localStorage.setItem(TOKEN_KEY, token);
+    try {
+      const me = await api.get("/auth/me");
+      const nextUser = parseMe(me.data);
+      setUser(nextUser);
+      return nextUser;
+    } catch (error) {
+      localStorage.removeItem(TOKEN_KEY);
+      throw error;
+    }
   }, []);
 
   const logout = useCallback(() => {
@@ -65,17 +78,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  const value = useMemo(
-    () => ({ user, loading, login, logout }),
-    [user, loading, login, logout],
+  const value = useMemo<AuthContextValue>(
+    () => ({ user, isLoading, login, logout }),
+    [user, isLoading, login, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export function useAuth(): AuthState {
+export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth harus dipakai di dalam AuthProvider');
+  if (!ctx) throw new Error("useAuth harus dipakai di dalam AuthProvider.");
   return ctx;
 }
-
