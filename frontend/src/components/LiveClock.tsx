@@ -1,5 +1,4 @@
 import { CheckCircle2, Loader2, WifiOff } from 'lucide-react';
-import { Card } from '@/components/ui/card';
 import type { ClockStatus } from '@/hooks/useServerClock';
 import { formatDateLong, formatTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -35,7 +34,7 @@ function SyncLabel({ status }: { status: ClockStatus }) {
 
 export function LiveClock({ now, status, className }: Props) {
   return (
-    <Card className={cn('flex flex-col justify-between p-6', className)}>
+    <div className={cn('flex flex-col justify-between p-2 sm:p-4', className)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium text-muted">{formatDateLong(now)}</p>
         <SyncLabel status={status} />
@@ -44,7 +43,7 @@ export function LiveClock({ now, status, className }: Props) {
       <p
         role="timer"
         aria-live="off"
-        className="mt-8 font-display text-5xl leading-none tabular-nums tracking-tight text-ink sm:text-7xl"
+        className="mt-6 font-display text-5xl leading-none tabular-nums tracking-tight text-ink sm:text-7xl"
       >
         {formatTime(now)}
         <span className="ml-2 font-sans text-sm font-medium tracking-normal text-muted sm:text-base">
@@ -52,10 +51,9 @@ export function LiveClock({ now, status, className }: Props) {
         </span>
       </p>
 
-      <p className="mt-6 text-sm text-muted">
-        Jam ini hanya tampilan. Waktu absen resmi dicatat oleh server saat kamu mengirim.
+      <p className="mt-4 text-xs text-muted">
+        Waktu resmi dicatat oleh server saat absensi dikirim.
       </p>
-    </Card>
+    </div>
   );
 }
-

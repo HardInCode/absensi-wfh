@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import { ImagePlus, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Stamp } from '@/components/Stamp';
 import { formatDateShort, formatTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -94,7 +95,7 @@ export function PhotoDropzone({ file, onChange, stampName, now, disabled }: Prop
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
           className={cn(
-            'flex aspect-[4/3] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-edge bg-canvas px-6 text-center transition-colors hover:border-accent',
+            'flex aspect-[4/3] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-edge bg-canvas px-6 text-center transition-colors hover:border-accent active:bg-accent-soft/40',
             dragging && 'border-accent bg-accent-soft',
             disabled && 'cursor-not-allowed opacity-60',
           )}
@@ -103,7 +104,7 @@ export function PhotoDropzone({ file, onChange, stampName, now, disabled }: Prop
           <p className="text-sm font-medium text-ink">
             Tarik foto ke sini atau pilih dari perangkat
           </p>
-          <p className="text-xs text-muted">JPG, PNG, atau WebP · maksimal 3 MB</p>
+          <p className="text-xs text-muted">Format JPG, PNG, atau WebP (maksimal 3 MB)</p>
         </div>
       ) : (
         <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg border border-line bg-canvas">
@@ -113,14 +114,13 @@ export function PhotoDropzone({ file, onChange, stampName, now, disabled }: Prop
             className="h-full w-full object-cover"
           />
 
-          {/* Stempel pratinjau: waktu resmi tetap dari server */}
-          <div className="absolute bottom-3 left-3 max-w-[calc(100%-1.5rem)] -rotate-2 rounded-md border-2 border-accent bg-card px-3 py-2 text-accent">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em]">Pratinjau</p>
-            <p className="font-display text-base leading-tight tabular-nums sm:text-lg">
-              {formatDateShort(now)} · {formatTime(now)}
-            </p>
-            <p className="truncate text-xs font-medium">{stampName}</p>
-          </div>
+          <Stamp
+            label="Pratinjau"
+            time={formatTime(now)}
+            date={formatDateShort(now)}
+            name={stampName}
+            className="absolute bottom-3 left-3"
+          />
 
           <div className="absolute right-3 top-3 flex gap-2">
             <Button
@@ -158,4 +158,3 @@ export function PhotoDropzone({ file, onChange, stampName, now, disabled }: Prop
     </div>
   );
 }
-

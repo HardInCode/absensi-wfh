@@ -13,6 +13,7 @@ export default {
         edge: 'rgb(var(--color-edge) / <alpha-value>)',
         accent: 'rgb(var(--color-accent) / <alpha-value>)',
         'accent-soft': 'rgb(var(--color-accent-soft) / <alpha-value>)',
+        'accent-ink': 'rgb(var(--color-accent-ink) / <alpha-value>)',
         present: 'rgb(var(--color-present) / <alpha-value>)',
         'present-soft': 'rgb(var(--color-present-soft) / <alpha-value>)',
         danger: 'rgb(var(--color-danger) / <alpha-value>)',
@@ -31,4 +32,3 @@ export default {
   },
   plugins: [],
 } satisfies Config;
-
