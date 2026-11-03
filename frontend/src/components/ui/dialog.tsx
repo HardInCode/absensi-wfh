@@ -22,7 +22,7 @@ export const DialogContent = React.forwardRef<
       {children}
       <DialogPrimitive.Close
         aria-label="Tutup"
-        className="absolute right-4 top-4 rounded-md p-1 text-muted hover:text-ink cursor-pointer active:scale-95"
+        className="absolute right-4 top-4 rounded-md p-1 text-muted hover:text-ink active:bg-line/60"
       >
         <X className="size-4" />
       </DialogPrimitive.Close>

@@ -118,20 +118,20 @@ export default function AttendancePage() {
         description="Kirim foto bukti kerja dari rumah untuk mencatat kehadiranmu hari ini."
       />
 
-      <div className="grid items-start gap-5 lg:grid-cols-12">
-        <LiveClock now={now} status={status} className="lg:col-span-7" />
+      <div className="grid items-start gap-4 lg:grid-cols-12">
+        <LiveClock now={now} status={status} className="order-1 lg:col-span-7" />
 
         {/* Profil singkat */}
-        <Card className="p-6 lg:col-span-5">
+        <Card className="order-3 p-6 lg:order-2 lg:col-span-5">
           <div className="flex items-start gap-4">
             <div
               aria-hidden
-              className="grid size-12 shrink-0 place-items-center rounded-full bg-accent-soft font-display text-lg text-accent-ink font-semibold"
+              className="grid size-12 shrink-0 place-items-center rounded-full bg-accent-soft font-display text-lg text-accent-ink"
             >
               {initials(user.fullName)}
             </div>
             <div className="min-w-0">
-              <p className="truncate font-semibold text-ink">{user.fullName}</p>
+              <p className="truncate font-semibold">{user.fullName}</p>
               <p className="truncate text-sm text-muted">{user.position}</p>
             </div>
           </div>
@@ -150,7 +150,7 @@ export default function AttendancePage() {
                   <Badge variant="danger">Gagal dimuat</Badge>
                 ) : checkedIn && todayRecord ? (
                   <Badge variant="present">
-                    <CheckCircle2 aria-hidden /> Hadir ({formatTimeShort(todayRecord.checkInAt)})
+                    <CheckCircle2 aria-hidden /> Hadir pukul {formatTimeShort(todayRecord.checkInAt)}
                   </Badge>
                 ) : (
                   <Badge variant="neutral">Belum absen</Badge>
@@ -164,9 +164,9 @@ export default function AttendancePage() {
           </dl>
         </Card>
 
-        {/* Area foto / absen - Kartu Fokus Utama */}
-        <Card className="p-6 lg:col-span-7 border-line bg-card shadow-sm">
-          <CardTitle>Absen hari ini</CardTitle>
+        {/* Area foto / absen */}
+        <Card className="order-2 p-6 sm:p-8 lg:order-3 lg:col-span-7">
+          <CardTitle className="font-display text-2xl font-normal">Absen hari ini</CardTitle>
 
           {todayLoading ? (
             <div className="mt-4 space-y-3">
@@ -188,22 +188,20 @@ export default function AttendancePage() {
                 </span>
                 . Sampai jumpa besok.
               </p>
-
-              <div className="relative mt-4 aspect-[4/3] w-full overflow-hidden rounded-lg border border-line bg-canvas">
+              <div className="relative mt-4">
                 <AuthedImage
                   attendanceId={todayRecord.id}
                   alt="Foto bukti kerja hari ini"
-                  className="h-full w-full object-cover"
+                  className="aspect-[4/3] w-full rounded-lg border border-line"
                 />
                 <Stamp
                   label="Tercatat"
                   time={formatTime(todayRecord.checkInAt)}
                   date={formatYmd(todayRecord.attendanceDate)}
                   name={user.fullName}
-                  className="absolute bottom-3 left-3"
+                  className="absolute bottom-3 left-3 max-w-[calc(100%-1.5rem)]"
                 />
               </div>
-
               {todayRecord.notes && (
                 <p className="mt-3 rounded-md bg-canvas px-3 py-2 text-sm text-ink">
                   <span className="text-muted">Catatan: </span>
@@ -263,7 +261,7 @@ export default function AttendancePage() {
         </Card>
 
         {/* Riwayat */}
-        <Card className="lg:col-span-5">
+        <Card className="order-4 lg:col-span-5">
           <div className="p-6 pb-3">
             <CardTitle>Riwayat absen</CardTitle>
           </div>

@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /*
-  Design token "Warm Editorial Workspace" (Audit 001 - Aksen Biru Tinta).
+  Design token "Warm Editorial Workspace".
   Nilai berupa kanal RGB agar bisa dipakai dengan modifier opasitas Tailwind.
 */
 @layer base {
@@ -15,8 +15,8 @@
     --color-line: 228 223 213; /* #E4DFD5 garis dekoratif */
     --color-edge: 143 137 126; /* #8F897E batas kontrol input (kontras 3:1) */
     --color-accent: 30 77 140; /* #1E4D8C biru tinta */
-    --color-accent-soft: 228 235 245; /* #E4EBF5 latar lembut aksen */
-    --color-accent-ink: 23 57 107; /* #17396B teks kontras tinggi di atas accent-soft */
+    --color-accent-soft: 228 235 245; /* #E4EBF5 */
+    --color-accent-ink: 23 57 107; /* #17396B teks aksen di atas latar lembut */
     --color-present: 47 111 94; /* #2F6F5E hijau sage */
     --color-present-soft: 227 239 234; /* #E3EFEA */
     --color-danger: 161 43 43; /* #A12B2B */
@@ -29,12 +29,35 @@
 
   html {
     color-scheme: light;
+  }
+
+  html,
+  body {
     overflow-x: clip;
   }
 
   body {
     @apply bg-canvas font-sans text-ink antialiased;
-    overflow-x: clip;
+  }
+
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  select:not(:disabled),
+  label[for],
+  summary {
+    cursor: pointer;
+  }
+
+  @media (pointer: coarse) {
+    button,
+    [role='button'],
+    select,
+    input:not([type='checkbox']):not([type='file']) {
+      min-height: 44px;
+    }
+    button {
+      min-width: 44px;
+    }
   }
 
   :focus-visible {
@@ -45,15 +68,6 @@
   ::selection {
     background: rgb(var(--color-accent-soft));
     color: rgb(var(--color-ink));
-  }
-}
-
-@media (pointer: coarse) {
-  button,
-  [role="button"],
-  input[type="submit"],
-  select {
-    min-height: 44px;
   }
 }
 

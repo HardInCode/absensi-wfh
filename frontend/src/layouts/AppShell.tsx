@@ -26,9 +26,7 @@ export function AppShell() {
       <header className="border-b border-line bg-card">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-6">
-            <span className="font-display text-xl tracking-tight text-ink font-semibold">
-              Absensi WFH
-            </span>
+            <span className="font-display text-xl leading-none">Absensi WFH</span>
 
             {user.role === 'ADMIN_HRD' && (
               <nav aria-label="Navigasi utama" className="flex items-center gap-1">

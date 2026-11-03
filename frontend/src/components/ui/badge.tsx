@@ -9,7 +9,7 @@ const badgeVariants = cva(
       variant: {
         neutral: 'bg-line/70 text-muted',
         present: 'bg-present-soft text-present',
-        accent: 'bg-accent-soft text-accent',
+        accent: 'bg-accent-soft text-accent-ink',
         danger: 'bg-danger-soft text-danger',
       },
     },

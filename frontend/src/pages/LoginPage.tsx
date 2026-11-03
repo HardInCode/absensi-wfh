@@ -59,9 +59,7 @@ export default function LoginPage() {
     <div className="grid min-h-dvh lg:grid-cols-2">
       <section className="hidden flex-col justify-between border-r border-line bg-card p-12 lg:flex">
         <div>
-          <span className="font-display text-2xl font-semibold tracking-tight text-ink">
-            Absensi WFH
-          </span>
+          <span className="font-display text-2xl">Absensi WFH</span>
         </div>
 
         <div className="max-w-md">
@@ -78,16 +76,12 @@ export default function LoginPage() {
           </ul>
         </div>
 
-        <p className="text-xs text-muted">Alat internal HRD (zona waktu WIB Asia/Jakarta)</p>
+        <p className="text-xs text-muted">Alat internal HRD. Zona waktu WIB (Asia/Jakarta).</p>
       </section>
 
       <section className="flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-sm">
-          <div className="mb-8 lg:hidden">
-            <span className="font-display text-2xl font-semibold tracking-tight text-ink">
-              Absensi WFH
-            </span>
-          </div>
+          <span className="mb-8 block font-display text-2xl lg:hidden">Absensi WFH</span>
 
           <h1 className="font-display text-4xl text-ink">Masuk</h1>
           <p className="mt-1 text-sm text-muted">Gunakan akun yang diberikan oleh HRD.</p>
@@ -131,7 +125,7 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
-                  className="absolute right-1 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md text-muted hover:text-ink cursor-pointer active:scale-95"
+                  className="absolute right-1 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md text-muted hover:text-ink active:bg-line/60"
                 >
                   {showPassword ? (
                     <EyeOff className="size-4" aria-hidden />
@@ -149,8 +143,8 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-8 border-t border-line pt-5">
-            <p className="text-xs font-medium text-muted">
-              Akun demo (khusus pengembangan)
+            <p className="text-sm font-medium text-muted">
+              Akun demo (hapus di produksi)
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {DEMO_ACCOUNTS.map((acc) => (

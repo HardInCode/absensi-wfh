@@ -28,7 +28,7 @@ import { EmployeeFormDialog } from './EmployeeFormDialog';
 
 type DialogState = { mode: 'create' } | { mode: 'edit'; employee: Employee } | null;
 
-const TH = 'px-4 py-2.5 text-left text-xs font-semibold text-muted';
+const TH = 'px-4 py-2.5 text-left text-[13px] font-medium text-muted';
 const TD = 'px-4 py-2.5 align-middle';
 
 export default function EmployeesPage() {

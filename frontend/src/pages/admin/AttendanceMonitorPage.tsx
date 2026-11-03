@@ -15,7 +15,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { formatTime, formatYmd } from '@/lib/format';
 import type { AttendanceWithEmployee } from '@/lib/types';
 
-const TH = 'px-4 py-2.5 text-left text-xs font-semibold text-muted';
+const TH = 'px-4 py-2.5 text-left text-[13px] font-medium text-muted';
 const TD = 'px-4 py-2.5 align-middle';
 
 export default function AttendanceMonitorPage() {
@@ -153,7 +153,8 @@ export default function AttendanceMonitorPage() {
                         <td className={TD}>
                           <p className="font-medium">{row.employee.fullName}</p>
                           <p className="text-xs text-muted">
-                            <span className="tabular-nums">{row.employee.nik}</span> ({row.employee.position})
+                            <span className="tabular-nums">{row.employee.nik}</span>,{' '}
+                            {row.employee.position}
                           </p>
                         </td>
                         <td className={`${TD} max-w-[260px]`}>

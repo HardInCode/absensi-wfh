@@ -104,7 +104,7 @@ export function PhotoDropzone({ file, onChange, stampName, now, disabled }: Prop
           <p className="text-sm font-medium text-ink">
             Tarik foto ke sini atau pilih dari perangkat
           </p>
-          <p className="text-xs text-muted">Format JPG, PNG, atau WebP (maksimal 3 MB)</p>
+          <p className="text-xs text-muted">JPG, PNG, atau WebP, maksimal 3 MB</p>
         </div>
       ) : (
         <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg border border-line bg-canvas">
@@ -119,7 +119,7 @@ export function PhotoDropzone({ file, onChange, stampName, now, disabled }: Prop
             time={formatTime(now)}
             date={formatDateShort(now)}
             name={stampName}
-            className="absolute bottom-3 left-3"
+            className="absolute bottom-3 left-3 max-w-[calc(100%-1.5rem)]"
           />
 
           <div className="absolute right-3 top-3 flex gap-2">
