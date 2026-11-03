@@ -2,8 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  min-height: 100vh;
+/*
+  Design token "Warm Editorial Workspace".
+  Nilai berupa kanal RGB agar bisa dipakai dengan modifier opasitas Tailwind.
+*/
+@layer base {
+  :root {
+    --color-canvas: 247 245 240; /* #F7F5F0 latar */
+    --color-card: 255 255 255; /* #FFFFFF kartu */
+    --color-ink: 31 29 26; /* #1F1D1A teks */
+    --color-muted: 107 102 94; /* #6B665E teks sekunder */
+    --color-line: 228 223 213; /* #E4DFD5 garis dekoratif */
+    --color-edge: 143 137 126; /* #8F897E batas kontrol input (kontras 3:1) */
+    --color-accent: 176 74 34; /* #B04A22 terrakota */
+    --color-accent-soft: 246 231 223; /* #F6E7DF */
+    --color-present: 47 111 94; /* #2F6F5E hijau sage */
+    --color-present-soft: 227 239 234; /* #E3EFEA */
+    --color-danger: 161 43 43; /* #A12B2B */
+    --color-danger-soft: 248 228 225; /* #F8E4E1 */
+
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-ink antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--color-accent));
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: rgb(var(--color-accent-soft));
+    color: rgb(var(--color-ink));
+  }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
