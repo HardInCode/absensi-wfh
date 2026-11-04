@@ -1,5 +1,6 @@
 import axios from "axios";
 import { api } from "@/lib/api";
+import { ymdWib } from "@/lib/format";
 import type { AttendanceSettings, AttendanceStatus } from "@/lib/types";
 
 export type { AttendanceSettings, AttendanceStatus };
@@ -42,6 +43,25 @@ export interface Paged<T> {
   items: T[];
   meta: PageMeta;
 }
+
+export interface AbsentEmployee {
+  id: string;
+  nik: string;
+  fullName: string;
+}
+
+export interface AttendanceSummary {
+  date: string;
+  totalEmployees: number;
+  presentCount: number;
+  onTimeCount: number;
+  lateCount: number;
+  absentCount: number;
+  absentEmployees: AbsentEmployee[];
+}
+
+/** "" = semua status. */
+export type StatusFilter = AttendanceStatus | "";
 
 type Raw = Record<string, unknown>;
 
@@ -127,6 +147,24 @@ export function normalizeSettings(raw: unknown): AttendanceSettings {
   };
 }
 
+export function normalizeSummary(raw: unknown): AttendanceSummary {
+  const root: Raw = isRecord(raw) ? raw : {};
+  const absent = Array.isArray(root.absentEmployees) ? root.absentEmployees : [];
+  return {
+    date: pickStr(raw, "date"),
+    totalEmployees: pickNum(raw, "totalEmployees") ?? 0,
+    presentCount: pickNum(raw, "presentCount") ?? 0,
+    onTimeCount: pickNum(raw, "onTimeCount") ?? 0,
+    lateCount: pickNum(raw, "lateCount") ?? 0,
+    absentCount: pickNum(raw, "absentCount") ?? 0,
+    absentEmployees: absent.map((item) => ({
+      id: pickStr(item, "id"),
+      nik: pickStr(item, "nik"),
+      fullName: pickStr(item, "fullName", "full_name"),
+    })),
+  };
+}
+
 function normalizePaged<T>(raw: unknown, mapItem: (item: unknown) => T, fallbackLimit: number): Paged<T> {
   const root: Raw = isRecord(raw) ? raw : {};
   const list: unknown[] = Array.isArray(raw)
@@ -146,6 +184,16 @@ function normalizePaged<T>(raw: unknown, mapItem: (item: unknown) => T, fallback
   return { items: list.map(mapItem), meta: { page, limit, total, totalPages } };
 }
 
+function messageFromBody(data: unknown): string | null {
+  const message = isRecord(data) ? data.message : undefined;
+  if (Array.isArray(message)) {
+    const parts = message.filter((m): m is string => typeof m === "string");
+    if (parts.length > 0) return parts.join(". ");
+  }
+  if (typeof message === "string" && message !== "") return message;
+  return null;
+}
+
 export function getErrorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
     if (!error.response) {
@@ -153,17 +201,33 @@ export function getErrorMessage(error: unknown, fallback: string): string {
         ? "Server terlalu lama merespons. Coba lagi."
         : "Tidak dapat terhubung ke server. Periksa koneksi Anda.";
     }
-    const data: unknown = error.response.data;
-    const message = isRecord(data) ? data.message : undefined;
-    if (Array.isArray(message)) {
-      const parts = message.filter((m): m is string => typeof m === "string");
-      if (parts.length > 0) return parts.join(". ");
-    }
-    if (typeof message === "string" && message !== "") return message;
+    const fromBody = messageFromBody(error.response.data);
+    if (fromBody) return fromBody;
     if (error.response.status === 403) return "Anda tidak memiliki akses ke data ini.";
     if (error.response.status >= 500) return "Terjadi kesalahan di server. Coba lagi nanti.";
   }
   return fallback;
+}
+
+/**
+ * Pada request blob, body error juga berupa Blob, jadi dibaca dulu sebagai JSON
+ * supaya pesan validasi dari server (400) tetap tampil.
+ */
+export async function getExportErrorMessage(error: unknown): Promise<string> {
+  if (axios.isAxiosError(error) && error.response) {
+    const { status, data } = error.response;
+    if (status === 403) return "Anda tidak memiliki izin untuk mengekspor data absensi.";
+    if (data instanceof Blob) {
+      try {
+        const fromBody = messageFromBody(JSON.parse(await data.text()));
+        if (fromBody) return fromBody;
+      } catch {
+        /* body bukan JSON, lanjut ke pesan umum */
+      }
+    }
+    if (status >= 500) return "Server gagal membuat file CSV. Coba lagi nanti.";
+  }
+  return getErrorMessage(error, "Gagal mengekspor CSV. Coba lagi.");
 }
 
 export interface EmployeeQuery {
@@ -212,6 +276,16 @@ export interface AttendanceQuery {
   dateFrom: string;
   dateTo: string;
   employeeName: string;
+  status: StatusFilter;
+}
+
+function filterParams(query: { dateFrom: string; dateTo: string; employeeName: string; status: StatusFilter }) {
+  return {
+    ...(query.dateFrom ? { date_from: query.dateFrom } : {}),
+    ...(query.dateTo ? { date_to: query.dateTo } : {}),
+    ...(query.employeeName ? { employee_name: query.employeeName } : {}),
+    ...(query.status ? { status: query.status } : {}),
+  };
 }
 
 export async function fetchAttendances(
@@ -219,13 +293,7 @@ export async function fetchAttendances(
   signal?: AbortSignal,
 ): Promise<Paged<AttendanceRecord>> {
   const res = await api.get("/attendances", {
-    params: {
-      page: query.page,
-      limit: query.limit,
-      ...(query.dateFrom ? { date_from: query.dateFrom } : {}),
-      ...(query.dateTo ? { date_to: query.dateTo } : {}),
-      ...(query.employeeName ? { employee_name: query.employeeName } : {}),
-    },
+    params: { page: query.page, limit: query.limit, ...filterParams(query) },
     signal,
   });
   return normalizePaged(res.data, normalizeAttendance, query.limit);
@@ -234,6 +302,58 @@ export async function fetchAttendances(
 export async function fetchAttendancePhoto(id: string, signal?: AbortSignal): Promise<Blob> {
   const res = await api.get<Blob>(`/attendances/${id}/photo`, { responseType: "blob", signal });
   return res.data;
+}
+
+/** `date` (YYYY-MM-DD) opsional; tanpa date, server memakai hari ini WIB. */
+export async function fetchAttendanceSummary(date: string | undefined, signal?: AbortSignal): Promise<AttendanceSummary> {
+  const res = await api.get("/attendances/summary", {
+    params: date ? { date } : {},
+    signal,
+  });
+  return normalizeSummary(res.data);
+}
+
+export interface ExportQuery {
+  dateFrom: string;
+  dateTo: string;
+  employeeName: string;
+  status: StatusFilter;
+}
+
+export interface ExportResult {
+  blob: Blob;
+  filename: string;
+  /** true jika data yang cocok melebihi batas 5.000 baris. */
+  truncated: boolean;
+}
+
+function parseFilename(disposition: string): string | null {
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded[1].trim()).replace(/[\\/]/g, "_");
+    } catch {
+      /* lanjut ke filename biasa */
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(disposition);
+  return plain ? plain[1].trim().replace(/[\\/]/g, "_") : null;
+}
+
+export async function exportAttendancesCsv(query: ExportQuery, signal?: AbortSignal): Promise<ExportResult> {
+  const res = await api.get<Blob>("/attendances/export", {
+    params: filterParams(query),
+    responseType: "blob",
+    signal,
+    timeout: 120_000,
+  });
+  const disposition = String(res.headers["content-disposition"] ?? "");
+  const truncated = String(res.headers["x-export-truncated"] ?? "").toLowerCase() === "true";
+  return {
+    blob: res.data,
+    filename: parseFilename(disposition) ?? `rekap-absensi-wfh-${ymdWib(new Date())}.csv`,
+    truncated,
+  };
 }
 
 export type AttendanceSettingsInput = Partial<Omit<AttendanceSettings, "updatedAt">>;

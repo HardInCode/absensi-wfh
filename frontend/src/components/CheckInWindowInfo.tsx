@@ -43,3 +43,4 @@ export function CheckInWindowInfo({ settings, evaluation, loading, error }: Prop
     </div>
   );
 }
+

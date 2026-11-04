@@ -1,11 +1,23 @@
 import { useEffect } from "react";
+import { AlertCircle, AlertTriangle } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+export type BannerTone = "info" | "warning" | "danger";
 
 interface StatusBannerProps {
   message: string | null;
   onDismiss: () => void;
+  /** Default "info" (tampilan lama, dipakai halaman Master karyawan). */
+  tone?: BannerTone;
 }
 
-export function StatusBanner({ message, onDismiss }: StatusBannerProps) {
+const TONE_CLASS: Record<BannerTone, string> = {
+  info: "bg-accent-soft text-accent-ink",
+  warning: "border border-danger/40 bg-card text-ink",
+  danger: "border border-danger/30 bg-danger-soft text-danger",
+};
+
+export function StatusBanner({ message, onDismiss, tone = "info" }: StatusBannerProps) {
   useEffect(() => {
     if (!message) return;
     const timer = window.setTimeout(onDismiss, 6000);
@@ -16,10 +28,14 @@ export function StatusBanner({ message, onDismiss }: StatusBannerProps) {
 
   return (
     <div
-      role="status"
-      className="flex items-start justify-between gap-3 rounded-md bg-accent-soft px-4 py-3 text-sm text-accent-ink"
+      role={tone === "info" ? "status" : "alert"}
+      className={cn("flex items-start justify-between gap-3 rounded-md px-4 py-3 text-sm", TONE_CLASS[tone])}
     >
-      <p>{message}</p>
+      <div className="flex min-w-0 items-start gap-2">
+        {tone === "warning" && <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />}
+        {tone === "danger" && <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />}
+        <p>{message}</p>
+      </div>
       <button
         type="button"
         onClick={onDismiss}
@@ -30,4 +46,3 @@ export function StatusBanner({ message, onDismiss }: StatusBannerProps) {
     </div>
   );
 }
-

@@ -22,3 +22,4 @@ export function AttendanceStatusBadge({ status, lateMinutes, className }: Props)
     </Badge>
   );
 }
+

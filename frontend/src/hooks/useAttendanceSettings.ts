@@ -28,3 +28,4 @@ export function useAttendanceSettings() {
 
   return { settings, setSettings, isLoading, error, reload };
 }
+

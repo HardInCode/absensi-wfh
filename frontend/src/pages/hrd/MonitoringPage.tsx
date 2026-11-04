@@ -1,24 +1,54 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { Download, Loader2 } from "lucide-react";
 import { AttendanceStatusBadge } from "@/components/AttendanceStatusBadge";
+import { AttendanceSummaryCards } from "@/components/AttendanceSummaryCards";
 import { DataTable, type Column } from "@/components/DataTable";
 import { ImageIcon, SearchIcon } from "@/components/icons";
 import { PhotoLightbox } from "@/components/PhotoLightbox";
+import { StatusBanner, type BannerTone } from "@/components/StatusBanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagedQuery } from "@/hooks/usePagedQuery";
 import { useProtectedImage } from "@/hooks/useProtectedImage";
-import { fetchAttendances, type AttendanceRecord } from "@/lib/hrdApi";
+import { ymdWib } from "@/lib/format";
+import {
+  exportAttendancesCsv,
+  fetchAttendances,
+  getExportErrorMessage,
+  type AttendanceRecord,
+  type StatusFilter,
+} from "@/lib/hrdApi";
 import { formatAttendanceDate, formatTimeWib } from "@/lib/hrdFormat";
 
 const PAGE_SIZE = 10;
+const EXPORT_LIMIT_LABEL = "5.000";
 
 interface LightboxTarget {
   id: string;
   title: string;
   subtitle: string;
+}
+
+interface Toast {
+  id: number;
+  tone: BannerTone;
+  message: string;
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Beri browser waktu memulai unduhan sebelum URL dilepas.
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function AttendanceThumb({
@@ -66,27 +96,63 @@ export function MonitoringPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [nameInput, setNameInput] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("");
   const employeeName = useDebouncedValue(nameInput.trim(), 400);
 
   const rangeInvalid = Boolean(dateFrom && dateTo && dateFrom > dateTo);
-  const hasFilters = Boolean(dateFrom || dateTo || nameInput);
+  const hasFilters = Boolean(dateFrom || dateTo || nameInput || status);
 
-  const filterKey = `${dateFrom}|${dateTo}|${employeeName}`;
+  // Kartu ringkasan: satu hari penuh jika dari = sampai, selain itu hari ini (WIB).
+  const summaryDate = dateFrom && dateFrom === dateTo ? dateFrom : undefined;
+  const todayWib = ymdWib(new Date());
+
+  const filterKey = `${dateFrom}|${dateTo}|${employeeName}|${status}`;
   const [pageState, setPageState] = useState({ key: "", page: 1 });
   const page = pageState.key === filterKey ? pageState.page : 1;
 
   const { data, isLoading, error, reload } = usePagedQuery(
     fetchAttendances,
-    { page, limit: PAGE_SIZE, dateFrom, dateTo, employeeName },
+    { page, limit: PAGE_SIZE, dateFrom, dateTo, employeeName, status },
     !rangeInvalid,
   );
 
   const [lightbox, setLightbox] = useState<LightboxTarget | null>(null);
 
+  const [toast, setToast] = useState<Toast | null>(null);
+  const dismissToast = useCallback(() => setToast(null), []);
+  const [exporting, setExporting] = useState(false);
+
+  function showToast(tone: BannerTone, message: string) {
+    setToast({ id: Date.now(), tone, message });
+  }
+
   function resetFilters() {
     setDateFrom("");
     setDateTo("");
     setNameInput("");
+    setStatus("");
+  }
+
+  async function handleExport() {
+    if (exporting || rangeInvalid) return;
+    setExporting(true);
+    setToast(null);
+    try {
+      const result = await exportAttendancesCsv({ dateFrom, dateTo, employeeName, status });
+      saveBlob(result.blob, result.filename);
+      if (result.truncated) {
+        showToast(
+          "warning",
+          `File ${result.filename} sudah diunduh, tetapi datanya dipotong di ${EXPORT_LIMIT_LABEL} baris. Persempit rentang tanggal atau filter lalu ekspor lagi untuk data lengkap.`,
+        );
+      } else {
+        showToast("info", `Rekap tersimpan sebagai ${result.filename}.`);
+      }
+    } catch (err) {
+      showToast("danger", await getExportErrorMessage(err));
+    } finally {
+      setExporting(false);
+    }
   }
 
   const columns: Column<AttendanceRecord>[] = [
@@ -162,7 +228,7 @@ export function MonitoringPage() {
   const emptyContent = hasFilters
     ? {
         title: "Tidak ada absensi yang cocok",
-        description: "Ubah rentang tanggal atau nama, atau reset filter untuk melihat semua data.",
+        description: "Ubah rentang tanggal, nama, atau status, atau reset filter untuk melihat semua data.",
         action: (
           <Button variant="secondary" onClick={resetFilters} className="min-h-11 sm:min-h-0">
             Reset filter
@@ -181,7 +247,16 @@ export function MonitoringPage() {
         <p className="mt-1 text-sm text-muted">Hanya untuk dilihat. Data absensi tidak dapat diubah atau dihapus.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
+      <StatusBanner
+        key={toast?.id ?? "no-toast"}
+        message={toast?.message ?? null}
+        tone={toast?.tone}
+        onDismiss={dismissToast}
+      />
+
+      <AttendanceSummaryCards date={summaryDate} displayDate={summaryDate ?? todayWib} />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto] lg:items-end">
         <div className="space-y-1.5">
           <Label htmlFor="date-from">Dari tanggal</Label>
           <Input
@@ -219,14 +294,40 @@ export function MonitoringPage() {
             />
           </div>
         </div>
-        <div>
+        <div className="space-y-1.5">
+          <Label htmlFor="status-filter">Status</Label>
+          <Select
+            id="status-filter"
+            value={status}
+            onChange={(e) => setStatus(e.target.value as StatusFilter)}
+          >
+            <option value="">Semua</option>
+            <option value="ON_TIME">Tepat waktu</option>
+            <option value="LATE">Terlambat</option>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row lg:col-span-1">
           <Button
             variant="secondary"
             onClick={resetFilters}
             disabled={!hasFilters}
-            className="min-h-11 w-full sm:min-h-0 lg:w-auto"
+            className="min-h-11 sm:min-h-0"
           >
             Reset filter
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={handleExport}
+            disabled={exporting || rangeInvalid}
+            aria-busy={exporting}
+            className="min-h-11 sm:min-h-0"
+          >
+            {exporting ? (
+              <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden />
+            ) : (
+              <Download aria-hidden />
+            )}
+            {exporting ? "Mengunduh…" : "Ekspor CSV"}
           </Button>
         </div>
       </div>

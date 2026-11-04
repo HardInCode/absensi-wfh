@@ -75,3 +75,4 @@ export function evaluateCheckIn(settings: AttendanceSettings, now: Date): CheckI
     noteRequired: settings.requireNoteWhenLate && isLate,
   };
 }
+
