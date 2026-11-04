@@ -27,3 +27,4 @@ export class AttendanceSettings {
   @Column({ name: 'updated_at', type: 'datetime' })
   updatedAt: Date;
 }
+

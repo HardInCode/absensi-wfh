@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   StreamableFile,
   UploadedFile,
   UseInterceptors,
@@ -22,6 +23,7 @@ import {
   ApiProduces,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { memoryStorage } from 'multer';
 import { AuthUser, Role } from '@app/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -33,9 +35,12 @@ import {
   AttendanceListResponseDto,
   AttendanceResponseDto,
   AttendanceSettingsResponseDto,
+  AttendanceSummaryResponseDto,
   CreateAttendanceDto,
+  ExportAttendancesQueryDto,
   QueryAttendancesDto,
   QueryMyAttendancesDto,
+  QuerySummaryDto,
   UpdateAttendanceSettingsDto,
 } from './dto/attendance.dto';
 
@@ -99,6 +104,35 @@ export class AttendancesController {
   @ApiOkResponse({ type: AttendanceSettingsResponseDto })
   updateSettings(@Body() dto: UpdateAttendanceSettingsDto) {
     return this.attendances.updateSettings(dto);
+  }
+
+  @Get('summary')
+  @Roles(Role.ADMIN_HRD)
+  @ApiOkResponse({ type: AttendanceSummaryResponseDto })
+  summary(@Query() query: QuerySummaryDto) {
+    return this.attendances.summary(query);
+  }
+
+  @Get('export')
+  @Roles(Role.ADMIN_HRD)
+  @ApiProduces('text/csv')
+  @ApiOkResponse({
+    description:
+      'File CSV (UTF-8 dengan BOM), maks 5000 baris. Header X-Export-Truncated: true jika data terpotong.',
+  })
+  @Header('Cache-Control', 'private, no-store')
+  async exportCsv(
+    @Query() query: ExportAttendancesQueryDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const { content, filename, truncated } = await this.attendances.exportCsv(query);
+    res.setHeader('X-Export-Truncated', String(truncated));
+    const body = Buffer.from(content, 'utf8');
+    return new StreamableFile(body, {
+      type: 'text/csv; charset=utf-8',
+      length: body.length,
+      disposition: `attachment; filename="${filename}"`,
+    });
   }
 
   @Get()

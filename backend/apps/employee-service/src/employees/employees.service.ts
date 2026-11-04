@@ -13,6 +13,7 @@ import {
   EmployeeView,
   PaginatedResult,
   QueryEmployeesDto,
+  Role,
   UpdateEmployeeDto,
 } from '@app/common';
 import { toEmployeeView } from './employee.mapper';
@@ -160,6 +161,21 @@ export class EmployeesService {
     const rows = await this.repo.find({
       where: { id: In(ids) },
       select: { id: true, nik: true, fullName: true },
+    });
+    return rows.map((r) => ({ id: r.id, nik: r.nik, fullName: r.fullName }));
+  }
+
+  // ---- dipakai summary harian lewat gateway (Fase 5.5) ----
+
+  /**
+   * Populasi yang wajib absen: aktif DAN role EMPLOYEE (ADMIN_HRD tidak dihitung).
+   * Satu query, terurut menurut nama.
+   */
+  async findActiveStaff(): Promise<EmployeeBrief[]> {
+    const rows = await this.repo.find({
+      where: { isActive: true, role: Role.EMPLOYEE },
+      select: { id: true, nik: true, fullName: true },
+      order: { fullName: 'ASC', id: 'ASC' },
     });
     return rows.map((r) => ({ id: r.id, nik: r.nik, fullName: r.fullName }));
   }

@@ -117,3 +117,4 @@ export class AttendanceSettingsService implements OnModuleInit {
     return toRecord(await this.repo.save(row));
   }
 }
+

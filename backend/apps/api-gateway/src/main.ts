@@ -14,6 +14,8 @@ async function bootstrap() {
   app.enableCors({
     origin: config.getOrThrow<string>('FRONTEND_URL'),
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    // Agar frontend (Axios) bisa membaca nama file dan penanda export terpotong.
+    exposedHeaders: ['Content-Disposition', 'X-Export-Truncated'],
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableShutdownHooks();
@@ -37,4 +39,3 @@ async function bootstrap() {
 }
 
 bootstrap();
-

@@ -4,6 +4,7 @@ import {
   AllRpcExceptionsFilter,
   AttendancePattern,
   CreateAttendancePayload,
+  DailyStatsPayload,
   ListAttendancesPayload,
   UpdateAttendanceSettingsPayload,
 } from '@app/common';
@@ -46,5 +47,10 @@ export class AttendancesController {
   @MessagePattern(AttendancePattern.UPDATE_SETTINGS)
   updateSettings(@Payload() payload: UpdateAttendanceSettingsPayload) {
     return this.settings.update(payload);
+  }
+
+  @MessagePattern(AttendancePattern.GET_DAILY_STATS)
+  getDailyStats(@Payload() payload: DailyStatsPayload) {
+    return this.attendances.getDailyStats(payload);
   }
 }

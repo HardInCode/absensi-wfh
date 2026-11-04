@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import { Transform, TransformFnParams, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -6,6 +6,7 @@ import {
   ArrayUnique,
   IsArray,
   IsBoolean,
+  IsEnum,
   IsInt,
   IsOptional,
   IsString,
@@ -19,6 +20,9 @@ import { AttendanceStatus, HM_REGEX } from '@app/common';
 
 const trim = ({ value }: TransformFnParams) =>
   typeof value === 'string' ? value.trim() : value;
+
+const trimUpper = ({ value }: TransformFnParams) =>
+  typeof value === 'string' ? value.trim().toUpperCase() : value;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -89,6 +93,28 @@ export class QueryAttendancesDto extends QueryMyAttendancesDto {
   @IsString()
   @MaxLength(100)
   employee_name?: string;
+
+  @ApiPropertyOptional({ enum: AttendanceStatus, enumName: 'AttendanceStatus' })
+  @IsOptional()
+  @Transform(trimUpper)
+  @IsEnum(AttendanceStatus, { message: 'status harus ON_TIME atau LATE' })
+  status?: AttendanceStatus;
+}
+
+/** Filter export = filter daftar HRD tanpa paginasi (selalu halaman 1, maks 5000 baris). */
+export class ExportAttendancesQueryDto extends OmitType(QueryAttendancesDto, [
+  'page',
+  'limit',
+] as const) {}
+
+export class QuerySummaryDto {
+  @ApiPropertyOptional({
+    example: '2026-11-04',
+    description: 'YYYY-MM-DD (WIB). Default: hari ini WIB.',
+  })
+  @IsOptional()
+  @Matches(DATE_RE, { message: 'date harus berformat YYYY-MM-DD' })
+  date?: string;
 }
 
 /** PATCH parsial: kirim hanya field yang ingin diubah. */
@@ -181,4 +207,14 @@ export class AttendanceListResponseDto {
 export class AttendanceAdminListResponseDto {
   @ApiProperty({ type: [AttendanceAdminResponseDto] }) data: AttendanceAdminResponseDto[];
   @ApiProperty({ type: AttendanceMetaDto }) meta: AttendanceMetaDto;
+}
+
+export class AttendanceSummaryResponseDto {
+  @ApiProperty({ example: '2026-11-04' }) date: string;
+  @ApiProperty({ description: 'Karyawan aktif ber-role EMPLOYEE' }) totalEmployees: number;
+  @ApiProperty() presentCount: number;
+  @ApiProperty() onTimeCount: number;
+  @ApiProperty() lateCount: number;
+  @ApiProperty() absentCount: number;
+  @ApiProperty({ type: [AttendanceEmployeeDto] }) absentEmployees: AttendanceEmployeeDto[];
 }

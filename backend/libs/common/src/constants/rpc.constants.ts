@@ -11,6 +11,7 @@ export const EmployeePattern = {
   EMPLOYEES_REMOVE: 'employees.remove',
   EMPLOYEES_SEARCH_IDS: 'employees.searchIds',
   EMPLOYEES_FIND_BRIEFS: 'employees.findBriefs',
+  EMPLOYEES_FIND_ACTIVE_STAFF: 'employees.findActiveStaff',
 } as const;
 
 export const AttendancePattern = {
@@ -20,6 +21,7 @@ export const AttendancePattern = {
   FIND_ONE: 'attendances.findOne',
   GET_SETTINGS: 'attendances.getSettings',
   UPDATE_SETTINGS: 'attendances.updateSettings',
+  GET_DAILY_STATS: 'attendances.getDailyStats',
 } as const;
 
 export const TIMEZONE = 'Asia/Jakarta';

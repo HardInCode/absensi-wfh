@@ -48,4 +48,9 @@ export class EmployeesController {
   findBriefs(@Payload() payload: { ids: string[] }) {
     return this.employees.findBriefsByIds(payload.ids);
   }
+
+  @MessagePattern(EmployeePattern.EMPLOYEES_FIND_ACTIVE_STAFF)
+  findActiveStaff() {
+    return this.employees.findActiveStaff();
+  }
 }

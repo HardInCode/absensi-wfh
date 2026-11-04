@@ -7,14 +7,20 @@ import {
 } from '@nestjs/common';
 import { ReadStream } from 'fs';
 import {
+  AttendanceRecord,
   AttendanceSettingsRecord,
+  AttendanceStatus,
   AuthUser,
+  EmployeeBrief,
   PaginatedResult,
   Role,
   UpdateAttendanceSettingsPayload,
+  formatWibIso,
+  wibDateString,
 } from '@app/common';
 import { AttendanceServiceClient } from '../clients/attendance-service.client';
 import { EmployeeServiceClient } from '../clients/employee-service.client';
+import { EXPORT_MAX_ROWS } from './attendances.export.constants';
 import { SEARCH_ID_LIMIT } from './attendances.constants';
 import {
   AttendanceAdminView,
@@ -26,9 +32,11 @@ import {
   CreateAttendanceDto,
   QueryAttendancesDto,
   QueryMyAttendancesDto,
+  QuerySummaryDto,
   UpdateAttendanceSettingsDto,
 } from './dto/attendance.dto';
 import { PhotoStorageService } from './photo-storage.service';
+import { buildCsv } from './utils/csv.util';
 import { detectImageType } from './utils/image-type.util';
 
 const isRealDate = (s: string) => {
@@ -43,6 +51,45 @@ function assertDateRange(from?: string, to?: string) {
     throw new BadRequestException('dateFrom must not be after dateTo');
   }
 }
+
+export interface AttendanceSummaryView {
+  date: string;
+  totalEmployees: number;
+  presentCount: number;
+  onTimeCount: number;
+  lateCount: number;
+  absentCount: number;
+  absentEmployees: { id: string; fullName: string; nik: string }[];
+}
+
+type AttendanceFilterInput = Pick<
+  QueryAttendancesDto,
+  'dateFrom' | 'dateTo' | 'date_from' | 'date_to' | 'search' | 'employee_name' | 'employeeId' | 'status'
+>;
+
+interface ResolvedFilter {
+  dateFrom?: string;
+  dateTo?: string;
+  status?: AttendanceStatus;
+  employeeIds?: string[];
+  /** true jika pencarian nama/NIK tidak cocok dengan siapa pun: hasil pasti kosong. */
+  noMatch: boolean;
+}
+
+const STATUS_LABEL: Record<AttendanceStatus, string> = {
+  [AttendanceStatus.ON_TIME]: 'Tepat Waktu',
+  [AttendanceStatus.LATE]: 'Terlambat',
+};
+
+const CSV_HEADER = [
+  'NIK',
+  'Nama Karyawan',
+  'Tanggal',
+  'Jam (WIB)',
+  'Status',
+  'Keterlambatan (Menit)',
+  'Catatan',
+];
 
 @Injectable()
 export class AttendancesService {
@@ -102,7 +149,8 @@ export class AttendancesService {
     return { data: result.data.map(toAttendanceView), meta: result.meta };
   }
 
-  async list(q: QueryAttendancesDto): Promise<PaginatedResult<AttendanceAdminView>> {
+  /** Filter bersama untuk daftar HRD dan export, supaya perilakunya selalu sama. */
+  private async resolveFilter(q: AttendanceFilterInput): Promise<ResolvedFilter> {
     const dateFrom = q.dateFrom ?? q.date_from;
     const dateTo = q.dateTo ?? q.date_to;
     const search = q.search ?? q.employee_name;
@@ -116,30 +164,126 @@ export class AttendancesService {
       }
       employeeIds = q.employeeId ? matched.filter((id) => id === q.employeeId) : matched;
       if (employeeIds.length === 0) {
-        return {
-          data: [],
-          meta: { total: 0, page: q.page, limit: q.limit, totalPages: 0 },
-        };
+        return { dateFrom, dateTo, status: q.status, employeeIds, noMatch: true };
       }
     } else if (q.employeeId) {
       employeeIds = [q.employeeId];
+    }
+    return { dateFrom, dateTo, status: q.status, employeeIds, noMatch: false };
+  }
+
+  /** Satu query batch untuk profil karyawan (bukan N+1). */
+  private async briefsById(records: AttendanceRecord[]): Promise<Map<string, EmployeeBrief>> {
+    const ids = [...new Set(records.map((r) => r.employeeId))];
+    const briefs = ids.length ? await this.employees.findBriefsByIds(ids) : [];
+    return new Map(briefs.map((b) => [b.id, b]));
+  }
+
+  async list(q: QueryAttendancesDto): Promise<PaginatedResult<AttendanceAdminView>> {
+    const f = await this.resolveFilter(q);
+    if (f.noMatch) {
+      return {
+        data: [],
+        meta: { total: 0, page: q.page, limit: q.limit, totalPages: 0 },
+      };
     }
 
     const result = await this.attendances.findAll({
       page: q.page,
       limit: q.limit,
-      employeeIds,
-      dateFrom,
-      dateTo,
+      employeeIds: f.employeeIds,
+      dateFrom: f.dateFrom,
+      dateTo: f.dateTo,
+      status: f.status,
     });
 
-    const ids = [...new Set(result.data.map((r) => r.employeeId))];
-    const briefs = ids.length ? await this.employees.findBriefsByIds(ids) : [];
-    const byId = new Map(briefs.map((b) => [b.id, b]));
-
+    const byId = await this.briefsById(result.data);
     return {
       data: result.data.map((r) => toAttendanceAdminView(r, byId.get(r.employeeId) ?? null)),
       meta: result.meta,
+    };
+  }
+
+  /**
+   * Ringkasan harian. Populasi = karyawan aktif ber-role EMPLOYEE (ADMIN_HRD tidak dihitung),
+   * diambil SEKALI dari employee-service. Urutannya sekuensial karena getDailyStats
+   * membutuhkan daftar ID tersebut; total tetap dua panggilan RPC.
+   */
+  async summary(q: QuerySummaryDto): Promise<AttendanceSummaryView> {
+    const date = q.date ?? wibDateString();
+    if (!isRealDate(date)) {
+      throw new BadRequestException('Tanggal tidak valid. Gunakan format YYYY-MM-DD, contoh 2026-11-04.');
+    }
+
+    const staff = await this.employees.findActiveStaff();
+    const stats = await this.attendances.getDailyStats({
+      date,
+      employeeIds: staff.map((s) => s.id),
+    });
+
+    const present = new Set(stats.presentEmployeeIds);
+    const absentEmployees = staff
+      .filter((s) => !present.has(s.id))
+      .map((s) => ({ id: s.id, fullName: s.fullName, nik: s.nik }));
+
+    return {
+      date,
+      totalEmployees: staff.length,
+      presentCount: stats.presentCount,
+      onTimeCount: stats.onTimeCount,
+      lateCount: stats.lateCount,
+      absentCount: absentEmployees.length,
+      absentEmployees,
+    };
+  }
+
+  /** CSV sesuai filter daftar HRD. Maksimum EXPORT_MAX_ROWS baris; `truncated` menandai data terpotong. */
+  async exportCsv(
+    q: AttendanceFilterInput,
+  ): Promise<{ content: string; filename: string; truncated: boolean }> {
+    const f = await this.resolveFilter(q);
+
+    let records: AttendanceRecord[] = [];
+    let total = 0;
+    if (!f.noMatch) {
+      const result = await this.attendances.findAll({
+        page: 1,
+        limit: EXPORT_MAX_ROWS,
+        employeeIds: f.employeeIds,
+        dateFrom: f.dateFrom,
+        dateTo: f.dateTo,
+        status: f.status,
+      });
+      records = result.data;
+      total = result.meta.total;
+    }
+
+    const truncated = total > EXPORT_MAX_ROWS;
+    if (truncated) {
+      this.logger.warn(`Export dipotong: ${total} baris cocok, hanya ${EXPORT_MAX_ROWS} diekspor`);
+    }
+
+    const byId = await this.briefsById(records);
+    const rows = records.map((r) => {
+      const emp = byId.get(r.employeeId);
+      // checkInAt tiba sebagai ISO UTC lewat TCP; ubah ke jam dinding WIB (HH:mm:ss).
+      const jam = formatWibIso(new Date(r.checkInAt)).slice(11, 19);
+      return [
+        emp?.nik ?? '',
+        emp?.fullName ?? '',
+        r.attendanceDate,
+        jam,
+        STATUS_LABEL[r.status] ?? r.status,
+        r.lateMinutes,
+        r.notes ?? '',
+      ];
+    });
+
+    return {
+      // BOM agar Excel membaca UTF-8 dengan benar.
+      content: '\uFEFF' + buildCsv(CSV_HEADER, rows),
+      filename: `rekap-absensi-wfh-${wibDateString()}.csv`,
+      truncated,
     };
   }
 

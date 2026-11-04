@@ -87,4 +87,12 @@ export class EmployeeServiceClient {
       { ids },
     );
   }
+
+  /** Karyawan aktif ber-role EMPLOYEE (tanpa ADMIN_HRD), terurut menurut nama. */
+  findActiveStaff() {
+    return this.call<EmployeeBrief[], Record<string, never>>(
+      EmployeePattern.EMPLOYEES_FIND_ACTIVE_STAFF,
+      {},
+    );
+  }
 }

@@ -11,6 +11,8 @@ import {
   AttendanceStatus,
   CreateAttendancePayload,
   DAY_NAMES_ID,
+  DailyStatsPayload,
+  DailyStatsResult,
   formatWorkingDays,
   hmToMinutes,
   ListAttendancesPayload,
@@ -138,6 +140,7 @@ export class AttendancesService {
     }
     if (p.dateFrom) qb.andWhere('a.attendanceDate >= :dateFrom', { dateFrom: p.dateFrom });
     if (p.dateTo) qb.andWhere('a.attendanceDate <= :dateTo', { dateTo: p.dateTo });
+    if (p.status) qb.andWhere('a.status = :status', { status: p.status });
 
     const [rows, total] = await qb
       .orderBy('a.checkInAt', 'DESC')
@@ -149,6 +152,34 @@ export class AttendancesService {
     return {
       data: rows.map(toRecord),
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  /**
+   * Statistik satu hari, HANYA untuk employeeIds yang dikirim gateway
+   * (aktif + role EMPLOYEE). Satu query; UNIK (employee_id, attendance_date)
+   * menjamin satu baris per karyawan, jadi jumlah baris = jumlah hadir.
+   */
+  async getDailyStats(p: DailyStatsPayload): Promise<DailyStatsResult> {
+    const ids = p.employeeIds ?? [];
+    if (ids.length === 0) {
+      return { presentCount: 0, onTimeCount: 0, lateCount: 0, presentEmployeeIds: [] };
+    }
+
+    const rows = await this.repo
+      .createQueryBuilder('a')
+      .select('a.employeeId', 'employeeId')
+      .addSelect('a.status', 'status')
+      .where('a.attendanceDate = :date', { date: p.date })
+      .andWhere('a.employeeId IN (:...ids)', { ids })
+      .getRawMany<{ employeeId: string; status: AttendanceStatus }>();
+
+    const lateCount = rows.filter((r) => r.status === AttendanceStatus.LATE).length;
+    return {
+      presentCount: rows.length,
+      onTimeCount: rows.length - lateCount,
+      lateCount,
+      presentEmployeeIds: rows.map((r) => r.employeeId),
     };
   }
 }

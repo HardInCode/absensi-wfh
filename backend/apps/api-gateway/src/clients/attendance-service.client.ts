@@ -7,6 +7,8 @@ import {
   AttendanceRecord,
   AttendanceSettingsRecord,
   CreateAttendancePayload,
+  DailyStatsPayload,
+  DailyStatsResult,
   ListAttendancesPayload,
   PaginatedResult,
   UpdateAttendanceSettingsPayload,
@@ -63,6 +65,13 @@ export class AttendanceServiceClient {
   updateSettings(payload: UpdateAttendanceSettingsPayload) {
     return this.call<AttendanceSettingsRecord, UpdateAttendanceSettingsPayload>(
       AttendancePattern.UPDATE_SETTINGS,
+      payload,
+    );
+  }
+
+  getDailyStats(payload: DailyStatsPayload) {
+    return this.call<DailyStatsResult, DailyStatsPayload>(
+      AttendancePattern.GET_DAILY_STATS,
       payload,
     );
   }

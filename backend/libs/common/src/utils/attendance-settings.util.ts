@@ -65,3 +65,4 @@ export function validateAttendanceSettings(s: AttendanceSettingsRecord): string[
 
   return errors;
 }
+
