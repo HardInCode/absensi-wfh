@@ -6,7 +6,7 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from 'react';
-import { Camera, ImagePlus, Loader2, RotateCcw, X } from 'lucide-react';
+import { Camera, ImagePlus, Loader2, RotateCcw, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Stamp } from '@/components/Stamp';
 import { formatDateShort, formatTime } from '@/lib/format';
@@ -19,6 +19,7 @@ const MAX_SIDE = 1280;
 const JPEG_QUALITIES = [0.85, 0.7, 0.55];
 
 type CameraStatus = 'idle' | 'starting' | 'live';
+type InputMode = 'camera' | 'upload';
 
 interface CameraNotice {
   message: string;
@@ -74,6 +75,7 @@ export function PhotoDropzone({ file, onChange, stampName, now, disabled }: Prop
   /** Penanda permintaan kamera terbaru; hasil permintaan lama dibuang. */
   const requestRef = useRef(0);
 
+  const [mode, setMode] = useState<InputMode>('camera');
   const [dragging, setDragging] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -231,7 +233,7 @@ export function PhotoDropzone({ file, onChange, stampName, now, disabled }: Prop
     }
   }
 
-  // ---- Unggah file (fallback) ----
+  // ---- Unggah file ----
   function pick(list: FileList | null) {
     const candidate = list?.[0];
     if (!candidate) return;
@@ -257,6 +259,7 @@ export function PhotoDropzone({ file, onChange, stampName, now, disabled }: Prop
   function retake() {
     if (source === 'camera') {
       clear();
+      setMode('camera');
       void startCamera();
     } else {
       inputRef.current?.click();
@@ -278,10 +281,10 @@ export function PhotoDropzone({ file, onChange, stampName, now, disabled }: Prop
 
   const showPreview = Boolean(file && previewUrl);
   const showCamera = !showPreview && status !== 'idle';
-  const showFallback = !showPreview && !showCamera && notice?.fallback === true;
+  const showFallback = !showPreview && !showCamera && mode === 'camera' && notice?.fallback === true;
 
   return (
-    <div>
+    <div className="space-y-3">
       <input
         ref={inputRef}
         type="file"
@@ -292,6 +295,46 @@ export function PhotoDropzone({ file, onChange, stampName, now, disabled }: Prop
         disabled={disabled}
         onChange={(e) => pick(e.target.files)}
       />
+
+      {/* Pilihan Mode Tab (Kamera vs Unggah Berkas) - Tampil saat belum ada foto dan kamera tidak sedang aktif */}
+      {!showPreview && !showCamera && (
+        <div className="flex rounded-lg border border-line bg-card p-1 text-xs font-medium">
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              cancelCamera();
+              setMode('camera');
+            }}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-1.5 rounded-md py-2 transition-all',
+              mode === 'camera'
+                ? 'bg-accent-soft font-semibold text-accent-ink shadow-sm'
+                : 'text-muted hover:text-ink',
+            )}
+          >
+            <Camera className="size-4" />
+            Ambil dari Kamera
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              cancelCamera();
+              setMode('upload');
+            }}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-1.5 rounded-md py-2 transition-all',
+              mode === 'upload'
+                ? 'bg-accent-soft font-semibold text-accent-ink shadow-sm'
+                : 'text-muted hover:text-ink',
+            )}
+          >
+            <Upload className="size-4" />
+            Unggah Berkas
+          </button>
+        </div>
+      )}
 
       {/* 1. Hasil foto + stempel pratinjau */}
       {showPreview && previewUrl && (
@@ -380,7 +423,7 @@ export function PhotoDropzone({ file, onChange, stampName, now, disabled }: Prop
         </div>
       )}
 
-      {/* 3. Kamera tidak bisa dipakai: unggah file seperti sebelumnya */}
+      {/* 3. Kamera tidak bisa dipakai: pesan peringatan + fallback unggah file */}
       {showFallback && (
         <div className="space-y-3">
           <div
@@ -422,8 +465,8 @@ export function PhotoDropzone({ file, onChange, stampName, now, disabled }: Prop
         </div>
       )}
 
-      {/* 4. Awal: belum ada foto, kamera belum dibuka */}
-      {!showPreview && !showCamera && !showFallback && (
+      {/* 4A. Mode Kamera: Kamera belum dibuka (kondisi normal tanpa error) */}
+      {!showPreview && !showCamera && !showFallback && mode === 'camera' && (
         <div className="space-y-3">
           {notice && (
             <div
@@ -441,17 +484,57 @@ export function PhotoDropzone({ file, onChange, stampName, now, disabled }: Prop
                 Kamera depan akan dipakai. Pastikan wajah dan ruang kerjamu terlihat jelas.
               </p>
             </div>
-            <Button onClick={() => void startCamera()} disabled={disabled}>
-              <Camera /> Buka kamera
-            </Button>
+            <div className="flex flex-col items-center gap-2">
+              <Button onClick={() => void startCamera()} disabled={disabled}>
+                <Camera /> Buka kamera
+              </Button>
+              <button
+                type="button"
+                onClick={() => setMode('upload')}
+                disabled={disabled}
+                className="text-xs text-accent underline-offset-4 hover:underline"
+              >
+                Atau pilih file dari perangkat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4B. Mode Unggah Berkas: Drag and drop atau klik untuk memilih file */}
+      {!showPreview && !showCamera && mode === 'upload' && (
+        <div className="space-y-3">
+          <div
+            role="button"
+            tabIndex={disabled ? -1 : 0}
+            aria-disabled={disabled}
+            aria-label="Pilih foto bukti kerja dari perangkat"
+            onClick={() => !disabled && inputRef.current?.click()}
+            onKeyDown={onKeyDown}
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (!disabled) setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            className={cn(
+              'flex aspect-[4/3] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-edge bg-canvas px-6 text-center transition-colors hover:border-accent active:bg-accent-soft/40',
+              dragging && 'border-accent bg-accent-soft',
+              disabled && 'cursor-not-allowed opacity-60',
+            )}
+          >
+            <ImagePlus className="size-7 text-accent" aria-hidden />
+            <p className="text-sm font-medium text-ink">
+              Tarik foto ke sini atau pilih dari perangkat
+            </p>
+            <p className="text-xs text-muted">JPG, PNG, atau WebP, maksimal 3 MB</p>
           </div>
         </div>
       )}
 
       {showPreview && (
         <p className="mt-2 text-xs text-muted">
-          Stempel di atas hanya pratinjau. Waktu absen resmi dicatat server saat kamu menekan
-          kirim.
+          Stempel di atas hanya pratinjau. Waktu absen resmi dicatat server saat kamu menekan kirim.
         </p>
       )}
       {localError && (
