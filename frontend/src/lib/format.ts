@@ -7,6 +7,10 @@ const SHORT_MONTHS = [
   'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
 ];
 
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+};
+
 const timeFmt = new Intl.DateTimeFormat('en-GB', {
   timeZone: TZ,
   hour: '2-digit',
@@ -19,6 +23,11 @@ const hourFmt = new Intl.DateTimeFormat('en-GB', {
   timeZone: TZ,
   hour: '2-digit',
   hourCycle: 'h23',
+});
+
+const weekdayFmt = new Intl.DateTimeFormat('en-US', {
+  timeZone: TZ,
+  weekday: 'short',
 });
 
 const dateLongFmt = new Intl.DateTimeFormat('id-ID', {
@@ -47,7 +56,7 @@ function toDate(value: Date | string): Date {
   return typeof value === 'string' ? new Date(value) : value;
 }
 
-/** HH:mm:ss dalam WIB */
+/** HH:mm:ss dalam WIB, selalu dengan titik dua (satu-satunya format jam di aplikasi). */
 export function formatTime(value: Date | string): string {
   return timeFmt.format(toDate(value));
 }
@@ -77,6 +86,17 @@ export function hourWib(value: Date): number {
   return parseInt(hourFmt.format(value), 10);
 }
 
+/** Hari dalam seminggu menurut WIB: 0 = Minggu ... 6 = Sabtu. */
+export function dayOfWeekWib(value: Date): number {
+  return WEEKDAY_INDEX[weekdayFmt.format(value)] ?? 0;
+}
+
+/** Detik sejak 00:00:00 WIB. */
+export function secondsOfDayWib(value: Date): number {
+  const [h, m, s] = formatTime(value).split(':').map(Number);
+  return h * 3600 + m * 60 + s;
+}
+
 /**
  * Format string YYYY-MM-DD apa adanya tanpa new Date(), agar tidak bergeser zona waktu.
  */
@@ -104,4 +124,3 @@ export function initials(name: string): string {
   const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
   return (first + last).toUpperCase();
 }
-

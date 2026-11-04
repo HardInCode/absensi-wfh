@@ -20,6 +20,10 @@ const LoginPage = lazyPage(() => import("@/pages/LoginPage"), "LoginPage");
 const AttendancePage = lazyPage(() => import("@/pages/employee/AttendancePage"), "AttendancePage");
 const EmployeesPage = lazyPage(() => import("@/pages/hrd/EmployeesPage"), "EmployeesPage");
 const MonitoringPage = lazyPage(() => import("@/pages/hrd/MonitoringPage"), "MonitoringPage");
+const AttendanceSettingsPage = lazyPage(
+  () => import("@/pages/hrd/AttendanceSettingsPage"),
+  "AttendanceSettingsPage",
+);
 
 function RootRedirect() {
   const { user } = useAuth();
@@ -44,6 +48,7 @@ export default function App() {
               <Route path="hrd" element={<Navigate to="/hrd/employees" replace />} />
               <Route path="hrd/employees" element={<EmployeesPage />} />
               <Route path="hrd/monitoring" element={<MonitoringPage />} />
+              <Route path="hrd/settings" element={<AttendanceSettingsPage />} />
             </Route>
           </Route>
         </Route>

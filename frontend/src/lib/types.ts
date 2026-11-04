@@ -1,5 +1,7 @@
 export type Role = 'EMPLOYEE' | 'ADMIN_HRD';
 
+export type AttendanceStatus = 'ON_TIME' | 'LATE';
+
 export interface Employee {
   id: string;
   nik: string;
@@ -22,10 +24,24 @@ export interface Attendance {
   notes: string | null;
   createdAt: string;
   photoUrl: string;
+  status: AttendanceStatus;
+  /** 0 jika tepat waktu. */
+  lateMinutes: number;
 }
 
 export interface AttendanceWithEmployee extends Attendance {
   employee: Pick<Employee, 'id' | 'nik' | 'fullName' | 'email' | 'position'>;
+}
+
+/** Hari kerja memakai indeks JS: 0 = Minggu ... 6 = Sabtu. */
+export interface AttendanceSettings {
+  earliestCheckIn: string;
+  defaultCutoffTime: string;
+  toleranceMinutes: number;
+  requireNoteWhenLate: boolean;
+  workingDays: number[];
+  /** Opsional: hanya terisi jika server mengirimnya. */
+  updatedAt: string | null;
 }
 
 export interface Meta {
@@ -46,4 +62,3 @@ export interface LoginResponse {
   expiresIn: number;
   user: Employee;
 }
-

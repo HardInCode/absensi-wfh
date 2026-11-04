@@ -19,3 +19,4 @@ export function csvCell(value: CsvValue): string {
 export function buildCsv(header: string[], rows: CsvValue[][]): string {
   return [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
+

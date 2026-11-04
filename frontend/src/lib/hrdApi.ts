@@ -1,5 +1,8 @@
 import axios from "axios";
 import { api } from "@/lib/api";
+import type { AttendanceSettings, AttendanceStatus } from "@/lib/types";
+
+export type { AttendanceSettings, AttendanceStatus };
 
 export type Role = "EMPLOYEE" | "ADMIN_HRD";
 
@@ -23,6 +26,8 @@ export interface AttendanceRecord {
   checkInAt: string;
   attendanceDate: string;
   notes: string | null;
+  status: AttendanceStatus;
+  lateMinutes: number;
   employee: { nik: string; fullName: string; position: string };
 }
 
@@ -96,11 +101,29 @@ export function normalizeAttendance(raw: unknown): AttendanceRecord {
     checkInAt: pickStr(raw, "checkInAt", "check_in_at"),
     attendanceDate: pickStr(raw, "attendanceDate", "attendance_date"),
     notes: notes === "" ? null : notes,
+    status: pickStr(raw, "status") === "LATE" ? "LATE" : "ON_TIME",
+    lateMinutes: pickNum(raw, "lateMinutes", "late_minutes") ?? 0,
     employee: {
       nik: pickStr(nested, "nik"),
       fullName: pickStr(nested, "fullName", "full_name", "employeeName", "employee_name"),
       position: pickStr(nested, "position"),
     },
+  };
+}
+
+export function normalizeSettings(raw: unknown): AttendanceSettings {
+  const root: Raw = isRecord(raw) ? raw : {};
+  const days = Array.isArray(root.workingDays)
+    ? root.workingDays.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6)
+    : [];
+  const updatedAt = pickStr(raw, "updatedAt", "updated_at");
+  return {
+    earliestCheckIn: pickStr(raw, "earliestCheckIn").slice(0, 5) || "00:00",
+    defaultCutoffTime: pickStr(raw, "defaultCutoffTime").slice(0, 5) || "08:00",
+    toleranceMinutes: pickNum(raw, "toleranceMinutes") ?? 0,
+    requireNoteWhenLate: pickBool(raw, false, "requireNoteWhenLate"),
+    workingDays: [...new Set(days)].sort((a, b) => a - b),
+    updatedAt: updatedAt === "" ? null : updatedAt,
   };
 }
 
@@ -213,3 +236,14 @@ export async function fetchAttendancePhoto(id: string, signal?: AbortSignal): Pr
   return res.data;
 }
 
+export type AttendanceSettingsInput = Partial<Omit<AttendanceSettings, "updatedAt">>;
+
+export async function fetchAttendanceSettings(signal?: AbortSignal): Promise<AttendanceSettings> {
+  const res = await api.get("/attendances/settings", { signal });
+  return normalizeSettings(res.data);
+}
+
+export async function updateAttendanceSettings(input: AttendanceSettingsInput): Promise<AttendanceSettings> {
+  const res = await api.patch("/attendances/settings", input);
+  return normalizeSettings(res.data);
+}

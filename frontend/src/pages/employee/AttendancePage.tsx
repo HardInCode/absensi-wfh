@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { CheckCircle2, History, Loader2, Send } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
+import { AttendanceStatusBadge } from '@/components/AttendanceStatusBadge';
 import { AuthedImage } from '@/components/AuthedImage';
+import { CheckInWindowInfo } from '@/components/CheckInWindowInfo';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorState } from '@/components/ErrorState';
 import { LiveClock } from '@/components/LiveClock';
@@ -16,12 +18,13 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { useApiList } from '@/hooks/useApiList';
+import { useAttendanceSettings } from '@/hooks/useAttendanceSettings';
 import { useServerClock } from '@/hooks/useServerClock';
 import { api } from '@/lib/api';
+import { evaluateCheckIn } from '@/lib/attendanceRules';
 import { getErrorMessage, getStatus } from '@/lib/errors';
 import {
   formatTime,
-  formatTimeShort,
   formatYmd,
   greeting,
   hourWib,
@@ -37,6 +40,12 @@ export default function AttendancePage() {
   const { now, status } = useServerClock();
   const today = ymdWib(now);
 
+  const {
+    settings,
+    isLoading: settingsLoading,
+    error: settingsError,
+  } = useAttendanceSettings();
+
   const [page, setPage] = useState(1);
   const history = useApiList<Attendance>('/attendances/me', { page, limit: 5 });
 
@@ -46,6 +55,7 @@ export default function AttendancePage() {
 
   const [file, setFile] = useState<File | null>(null);
   const [notes, setNotes] = useState('');
+  const [noteMissing, setNoteMissing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -74,6 +84,10 @@ export default function AttendancePage() {
     todayRecord !== null && todayRecord.attendanceDate.slice(0, 10) === today;
   const firstName = user.fullName.trim().split(/\s+/)[0];
 
+  const rule = settings ? evaluateCheckIn(settings, now) : null;
+  const blockReason = rule && !rule.canSubmit ? rule.blockReason : null;
+  const noteRequired = rule?.noteRequired ?? false;
+
   function refreshHistory() {
     if (page === 1) history.refetch();
     else setPage(1);
@@ -82,8 +96,18 @@ export default function AttendancePage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitError(null);
+    setNoteMissing(false);
+    if (blockReason) {
+      setSubmitError(blockReason);
+      return;
+    }
     if (!file) {
       setSubmitError('Pilih foto bukti kerja terlebih dahulu.');
+      return;
+    }
+    if (noteRequired && !notes.trim()) {
+      setNoteMissing(true);
+      setSubmitError('Catatan wajib diisi karena kamu absen setelah batas jam masuk.');
       return;
     }
 
@@ -119,7 +143,14 @@ export default function AttendancePage() {
       />
 
       <div className="grid items-start gap-4 lg:grid-cols-12">
-        <LiveClock now={now} status={status} className="order-1 lg:col-span-7" />
+        <LiveClock now={now} status={status} className="order-1 lg:col-span-7">
+          <CheckInWindowInfo
+            settings={settings}
+            evaluation={rule}
+            loading={settingsLoading}
+            error={settingsError}
+          />
+        </LiveClock>
 
         {/* Profil singkat */}
         <Card className="order-3 p-6 lg:order-2 lg:col-span-5">
@@ -143,15 +174,21 @@ export default function AttendancePage() {
             </div>
             <div>
               <dt className="text-muted">Status hari ini</dt>
-              <dd className="mt-0.5">
+              <dd className="mt-0.5 flex flex-wrap gap-1.5">
                 {todayLoading ? (
                   <Skeleton className="h-6 w-28 rounded-full" />
                 ) : todayError ? (
                   <Badge variant="danger">Gagal dimuat</Badge>
                 ) : checkedIn && todayRecord ? (
-                  <Badge variant="present">
-                    <CheckCircle2 aria-hidden /> Hadir pukul {formatTimeShort(todayRecord.checkInAt)}
-                  </Badge>
+                  <>
+                    <Badge variant="present">
+                      <CheckCircle2 aria-hidden /> Hadir pukul {formatTime(todayRecord.checkInAt)}
+                    </Badge>
+                    <AttendanceStatusBadge
+                      status={todayRecord.status}
+                      lateMinutes={todayRecord.lateMinutes}
+                    />
+                  </>
                 ) : (
                   <Badge variant="neutral">Belum absen</Badge>
                 )}
@@ -188,6 +225,11 @@ export default function AttendancePage() {
                 </span>
                 . Sampai jumpa besok.
               </p>
+              <AttendanceStatusBadge
+                status={todayRecord.status}
+                lateMinutes={todayRecord.lateMinutes}
+                className="mt-2"
+              />
               <div className="relative mt-4">
                 <AuthedImage
                   attendanceId={todayRecord.id}
@@ -224,7 +266,9 @@ export default function AttendancePage() {
 
               <div className="space-y-1.5">
                 <div className="flex items-baseline justify-between">
-                  <Label htmlFor="notes">Catatan (opsional)</Label>
+                  <Label htmlFor="notes">
+                    {noteRequired ? 'Catatan (wajib)' : 'Catatan (opsional)'}
+                  </Label>
                   <span className="text-xs tabular-nums text-muted">
                     {notes.length}/{NOTES_MAX}
                   </span>
@@ -233,10 +277,27 @@ export default function AttendancePage() {
                   id="notes"
                   value={notes}
                   maxLength={NOTES_MAX}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Contoh: mengerjakan laporan bulanan dari ruang kerja di rumah."
+                  onChange={(e) => {
+                    setNotes(e.target.value);
+                    setNoteMissing(false);
+                  }}
+                  placeholder={
+                    noteRequired
+                      ? 'Jelaskan alasan kamu absen setelah batas jam masuk.'
+                      : 'Contoh: mengerjakan laporan bulanan dari ruang kerja di rumah.'
+                  }
+                  required={noteRequired}
+                  aria-required={noteRequired}
+                  aria-invalid={noteMissing}
+                  aria-describedby={noteRequired ? 'notes-hint' : undefined}
                   disabled={submitting}
+                  className={noteMissing ? 'border-danger' : undefined}
                 />
+                {noteRequired && rule && (
+                  <p id="notes-hint" className="text-xs text-muted">
+                    Wajib diisi karena sudah melewati batas {rule.deadline} WIB.
+                  </p>
+                )}
               </div>
 
               {submitError && (
@@ -248,14 +309,26 @@ export default function AttendancePage() {
                 </div>
               )}
 
-              <Button type="submit" className="w-full sm:w-auto" disabled={submitting}>
-                {submitting ? (
-                  <Loader2 className="animate-spin motion-reduce:animate-none" />
-                ) : (
-                  <Send />
+              <div className="space-y-2">
+                <Button
+                  type="submit"
+                  className="w-full sm:w-auto"
+                  disabled={submitting || blockReason !== null}
+                  aria-describedby={blockReason ? 'submit-block' : undefined}
+                >
+                  {submitting ? (
+                    <Loader2 className="animate-spin motion-reduce:animate-none" />
+                  ) : (
+                    <Send />
+                  )}
+                  {submitting ? 'Mengirim…' : 'Kirim absen'}
+                </Button>
+                {blockReason && (
+                  <p id="submit-block" role="status" className="text-sm text-muted">
+                    {blockReason}
+                  </p>
                 )}
-                {submitting ? 'Mengirim…' : 'Kirim absen'}
-              </Button>
+              </div>
             </form>
           )}
         </Card>
@@ -300,10 +373,15 @@ export default function AttendancePage() {
                       <p className="text-sm font-medium tabular-nums">
                         {formatYmd(item.attendanceDate)}
                         <span className="ml-2 font-normal text-muted">
-                          {formatTimeShort(item.checkInAt)} WIB
+                          {formatTime(item.checkInAt)} WIB
                         </span>
                       </p>
-                      <p className="truncate text-sm text-muted">
+                      <AttendanceStatusBadge
+                        status={item.status}
+                        lateMinutes={item.lateMinutes}
+                        className="mt-1"
+                      />
+                      <p className="mt-1 truncate text-sm text-muted">
                         {item.notes ?? 'Tanpa catatan'}
                       </p>
                     </div>

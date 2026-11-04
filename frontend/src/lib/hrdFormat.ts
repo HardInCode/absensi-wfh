@@ -1,3 +1,5 @@
+import { formatTime } from "@/lib/format";
+
 const TIME_ZONE = "Asia/Jakarta";
 
 /** "2026-11-03" -> "Sel, 3 Nov 2026". Memakai UTC agar tanggal tidak bergeser. */
@@ -28,16 +30,9 @@ export function formatAttendanceDate(dateValue: string, fallbackIso?: string): s
   return "-";
 }
 
-/** ISO UTC -> "13.45.02" dalam WIB. */
+/** ISO UTC -> "13:45:02" dalam WIB (titik dua, sama dengan halaman karyawan). */
 export function formatTimeWib(iso: string): string {
   const parsed = new Date(iso);
   if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleTimeString("id-ID", {
-    timeZone: TIME_ZONE,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
+  return formatTime(parsed);
 }
-

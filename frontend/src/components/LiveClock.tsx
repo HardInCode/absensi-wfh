@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { CheckCircle2, Loader2, WifiOff } from 'lucide-react';
 import type { ClockStatus } from '@/hooks/useServerClock';
 import { formatDateLong, formatTime } from '@/lib/format';
@@ -7,6 +8,8 @@ interface Props {
   now: Date;
   status: ClockStatus;
   className?: string;
+  /** Konten tambahan di bawah jam (mis. info batas jam masuk). */
+  children?: ReactNode;
 }
 
 function SyncLabel({ status }: { status: ClockStatus }) {
@@ -32,7 +35,7 @@ function SyncLabel({ status }: { status: ClockStatus }) {
   );
 }
 
-export function LiveClock({ now, status, className }: Props) {
+export function LiveClock({ now, status, className, children }: Props) {
   return (
     <div className={cn('flex flex-col justify-between py-2 lg:pr-8', className)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -50,6 +53,8 @@ export function LiveClock({ now, status, className }: Props) {
           WIB
         </span>
       </p>
+
+      {children && <div className="mt-5">{children}</div>}
 
       <p className="mt-6 text-sm text-muted">
         Jam ini hanya tampilan. Waktu absen resmi dicatat oleh server saat kamu mengirim.

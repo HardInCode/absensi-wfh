@@ -13,6 +13,7 @@ const NAV_ITEMS: Record<Role, { to: string; label: string }[]> = {
   ADMIN_HRD: [
     { to: "/hrd/employees", label: "Master karyawan" },
     { to: "/hrd/monitoring", label: "Monitoring absensi" },
+    { to: "/hrd/settings", label: "Pengaturan absensi" },
   ],
 };
 

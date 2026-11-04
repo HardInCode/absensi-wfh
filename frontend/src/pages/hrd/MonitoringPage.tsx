@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AttendanceStatusBadge } from "@/components/AttendanceStatusBadge";
 import { DataTable, type Column } from "@/components/DataTable";
 import { ImageIcon, SearchIcon } from "@/components/icons";
 import { PhotoLightbox } from "@/components/PhotoLightbox";
@@ -113,6 +114,15 @@ export function MonitoringPage() {
       key: "time",
       header: "Jam (WIB)",
       cell: (a) => <span className="whitespace-nowrap tabular-nums">{formatTimeWib(a.checkInAt)} WIB</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      cell: (a) => (
+        <span className="whitespace-nowrap">
+          <AttendanceStatusBadge status={a.status} lateMinutes={a.lateMinutes} />
+        </span>
+      ),
     },
     {
       key: "notes",
@@ -252,4 +262,3 @@ export function MonitoringPage() {
     </div>
   );
 }
-
