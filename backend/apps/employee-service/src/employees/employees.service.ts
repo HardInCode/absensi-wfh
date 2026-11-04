@@ -6,9 +6,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
-import { Brackets, FindOptionsWhere, QueryFailedError, Repository } from 'typeorm';
+import { Brackets, FindOptionsWhere, In, QueryFailedError, Repository } from 'typeorm';
 import {
   CreateEmployeeDto,
+  EmployeeBrief,
   EmployeeView,
   PaginatedResult,
   QueryEmployeesDto,
@@ -137,6 +138,32 @@ export class EmployeesService {
     return this.repo.findOneBy({ id });
   }
 
+  // ---- dipakai attendance lewat gateway (Fase 5B) ----
+
+  /** ID karyawan (aktif maupun nonaktif) yang nama atau NIK-nya cocok. */
+  async searchIds(search: string, limit: number): Promise<string[]> {
+    const like = `%${escapeLike(search.trim())}%`;
+    const rows = await this.repo
+      .createQueryBuilder('e')
+      .select('e.id', 'id')
+      .where('e.fullName LIKE :like', { like })
+      .orWhere('e.nik LIKE :like')
+      .orderBy('e.id', 'ASC')
+      .limit(limit)
+      .getRawMany<{ id: string }>();
+    return rows.map((r) => r.id);
+  }
+
+  /** Batch lookup satu query (bukan N+1). Tanpa filter isActive. */
+  async findBriefsByIds(ids: string[]): Promise<EmployeeBrief[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.repo.find({
+      where: { id: In(ids) },
+      select: { id: true, nik: true, fullName: true },
+    });
+    return rows.map((r) => ({ id: r.id, nik: r.nik, fullName: r.fullName }));
+  }
+
   // ---- private ----
 
   private async getEntity(id: string): Promise<Employee> {
@@ -179,4 +206,3 @@ export class EmployeesService {
     return e;
   }
 }
-

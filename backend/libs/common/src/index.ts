@@ -2,6 +2,7 @@ export * from './enums/role.enum';
 export * from './constants/rpc.constants';
 export * from './interfaces/auth.interface';
 export * from './interfaces/employee.interface';
+export * from './interfaces/attendance.interface';
 export * from './dto/auth.dto';
 export * from './dto/employee.dto';
 export * from './rpc/rpc-error';
@@ -10,4 +11,3 @@ export * from './rpc/send-rpc';
 export * from './config/env.validation';
 export * from './database/typeorm.config';
 export * from './utils/wib.util';
-

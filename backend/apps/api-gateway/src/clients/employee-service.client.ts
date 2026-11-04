@@ -5,6 +5,7 @@ import {
   AuthUser,
   CreateEmployeeDto,
   EMPLOYEE_SERVICE,
+  EmployeeBrief,
   EmployeePattern,
   EmployeeView,
   LoginDto,
@@ -72,5 +73,18 @@ export class EmployeeServiceClient {
       { id },
     );
   }
-}
 
+  searchIds(search: string, limit: number) {
+    return this.call<string[], { search: string; limit: number }>(
+      EmployeePattern.EMPLOYEES_SEARCH_IDS,
+      { search, limit },
+    );
+  }
+
+  findBriefsByIds(ids: string[]) {
+    return this.call<EmployeeBrief[], { ids: string[] }>(
+      EmployeePattern.EMPLOYEES_FIND_BRIEFS,
+      { ids },
+    );
+  }
+}

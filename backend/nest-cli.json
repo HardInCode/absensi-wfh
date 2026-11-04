@@ -27,6 +27,15 @@
         "tsConfigPath": "apps/employee-service/tsconfig.app.json"
       }
     },
+    "attendance-service": {
+      "type": "application",
+      "root": "apps/attendance-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/attendance-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/attendance-service/tsconfig.app.json"
+      }
+    },
     "common": {
       "type": "library",
       "root": "libs/common",

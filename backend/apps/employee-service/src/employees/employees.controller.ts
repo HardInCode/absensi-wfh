@@ -38,5 +38,14 @@ export class EmployeesController {
   remove(@Payload() payload: { id: string }) {
     return this.employees.remove(payload.id);
   }
-}
 
+  @MessagePattern(EmployeePattern.EMPLOYEES_SEARCH_IDS)
+  searchIds(@Payload() payload: { search: string; limit: number }) {
+    return this.employees.searchIds(payload.search, payload.limit);
+  }
+
+  @MessagePattern(EmployeePattern.EMPLOYEES_FIND_BRIEFS)
+  findBriefs(@Payload() payload: { ids: string[] }) {
+    return this.employees.findBriefsByIds(payload.ids);
+  }
+}

@@ -24,3 +24,9 @@ export interface PaginatedResult<T> {
   meta: PaginationMeta;
 }
 
+/** Data ringkas untuk memperkaya daftar absensi. */
+export interface EmployeeBrief {
+  id: string;
+  nik: string;
+  fullName: string;
+}

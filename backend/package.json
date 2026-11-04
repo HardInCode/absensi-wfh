@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "nest build api-gateway && nest build employee-service",
+    "build": "nest build api-gateway && nest build employee-service && nest build attendance-service",
     "start:gateway": "nest start api-gateway --watch",
     "start:employee": "nest start employee-service --watch",
-    "start:dev": "concurrently -n employee,gateway -c blue,green \"npm:start:employee\" \"npm:start:gateway\"",
+    "start:attendance": "nest start attendance-service --watch",
+    "start:dev": "concurrently -n employee,attendance,gateway -c blue,magenta,green \"npm:start:employee\" \"npm:start:attendance\" \"npm:start:gateway\"",
     "start:prod:gateway": "node dist/apps/api-gateway/main",
     "start:prod:employee": "node dist/apps/employee-service/main",
+    "start:prod:attendance": "node dist/apps/attendance-service/main",
     "seed": "ts-node -r tsconfig-paths/register apps/employee-service/src/database/seed.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
@@ -43,7 +45,7 @@
     "@types/node": "^20.12.12",
     "@types/passport-jwt": "^4.0.1",
     "concurrently": "^8.2.2",
-    "ts-loader": "^9.6.2",
+    "ts-loader": "^9.5.1",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.4.5"
