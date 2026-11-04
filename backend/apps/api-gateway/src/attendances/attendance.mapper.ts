@@ -1,4 +1,4 @@
-import { AttendanceRecord, EmployeeBrief } from '@app/common';
+import { AttendanceRecord, AttendanceStatus, EmployeeBrief } from '@app/common';
 
 export interface AttendanceView {
   id: string;
@@ -9,6 +9,8 @@ export interface AttendanceView {
   checkInAt: Date | string;
   photoUrl: string;
   notes: string | null;
+  status: AttendanceStatus;
+  lateMinutes: number;
 }
 
 export interface AttendanceAdminView extends AttendanceView {
@@ -26,6 +28,8 @@ export function toAttendanceView(r: AttendanceRecord): AttendanceView {
     checkInAt: r.checkInAt, // KOMPAT FRONTEND
     photoUrl: photoUrlFor(r.id),
     notes: r.notes,
+    status: r.status,
+    lateMinutes: r.lateMinutes,
   };
 }
 
@@ -35,4 +39,3 @@ export function toAttendanceAdminView(
 ): AttendanceAdminView {
   return { ...toAttendanceView(r), employee };
 }
-

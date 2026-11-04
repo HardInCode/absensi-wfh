@@ -18,6 +18,8 @@ export const AttendancePattern = {
   FIND_TODAY: 'attendances.findToday',
   FIND_ALL: 'attendances.findAll',
   FIND_ONE: 'attendances.findOne',
+  GET_SETTINGS: 'attendances.getSettings',
+  UPDATE_SETTINGS: 'attendances.updateSettings',
 } as const;
 
 export const TIMEZONE = 'Asia/Jakarta';

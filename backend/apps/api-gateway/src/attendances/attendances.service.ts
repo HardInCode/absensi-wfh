@@ -6,7 +6,13 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ReadStream } from 'fs';
-import { AuthUser, PaginatedResult, Role } from '@app/common';
+import {
+  AttendanceSettingsRecord,
+  AuthUser,
+  PaginatedResult,
+  Role,
+  UpdateAttendanceSettingsPayload,
+} from '@app/common';
 import { AttendanceServiceClient } from '../clients/attendance-service.client';
 import { EmployeeServiceClient } from '../clients/employee-service.client';
 import { SEARCH_ID_LIMIT } from './attendances.constants';
@@ -20,6 +26,7 @@ import {
   CreateAttendanceDto,
   QueryAttendancesDto,
   QueryMyAttendancesDto,
+  UpdateAttendanceSettingsDto,
 } from './dto/attendance.dto';
 import { PhotoStorageService } from './photo-storage.service';
 import { detectImageType } from './utils/image-type.util';
@@ -68,10 +75,9 @@ export class AttendancesService {
       return toAttendanceView(record);
     } catch (err) {
       if (err instanceof GatewayTimeoutException) {
-        // Hasil tidak pasti: record mungkin sudah tersimpan. File dibiarkan agar tidak ada record tanpa foto.
         this.logger.warn(`Timeout saat menyimpan absensi; file ${filename} dipertahankan`);
       } else {
-        await this.storage.remove(filename); // rollback file
+        await this.storage.remove(filename); // rollback file (termasuk saat 400 aturan jam kerja)
       }
       throw err;
     }
@@ -83,26 +89,20 @@ export class AttendancesService {
   }
 
   async mine(user: AuthUser, q: QueryMyAttendancesDto): Promise<PaginatedResult<AttendanceView>> {
-    // KOMPAT FRONTEND: terima alias snake_case.
     const dateFrom = q.dateFrom ?? q.date_from;
     const dateTo = q.dateTo ?? q.date_to;
     assertDateRange(dateFrom, dateTo);
     const result = await this.attendances.findAll({
       page: q.page,
       limit: q.limit,
-      employeeIds: [user.id], // dari token
+      employeeIds: [user.id],
       dateFrom,
       dateTo,
     });
     return { data: result.data.map(toAttendanceView), meta: result.meta };
   }
 
-  /**
-   * Pagination dilakukan di DB attendance-service SETELAH semua filter (nama, tanggal, employeeId)
-   * masuk ke WHERE yang sama. Nama/NIK ditempel setelah satu halaman terpotong, lewat satu batch lookup.
-   */
   async list(q: QueryAttendancesDto): Promise<PaginatedResult<AttendanceAdminView>> {
-    // KOMPAT FRONTEND: terima alias snake_case.
     const dateFrom = q.dateFrom ?? q.date_from;
     const dateTo = q.dateTo ?? q.date_to;
     const search = q.search ?? q.employee_name;
@@ -147,11 +147,25 @@ export class AttendancesService {
     user: AuthUser,
     id: string,
   ): Promise<{ stream: ReadStream; mime: string; size: number }> {
-    const record = await this.attendances.findOne(id); // 404 jika tidak ada
+    const record = await this.attendances.findOne(id);
     if (user.role !== Role.ADMIN_HRD && record.employeeId !== user.id) {
       throw new ForbiddenException('You are not allowed to view this photo');
     }
     return this.storage.open(record.photoPath);
   }
-}
 
+  getSettings(): Promise<AttendanceSettingsRecord> {
+    return this.attendances.getSettings();
+  }
+
+  /** Hanya field yang dikirim diteruskan; validasi lintas field di attendance-service. */
+  updateSettings(dto: UpdateAttendanceSettingsDto): Promise<AttendanceSettingsRecord> {
+    const patch: UpdateAttendanceSettingsPayload = {};
+    if (dto.earliestCheckIn !== undefined) patch.earliestCheckIn = dto.earliestCheckIn;
+    if (dto.defaultCutoffTime !== undefined) patch.defaultCutoffTime = dto.defaultCutoffTime;
+    if (dto.toleranceMinutes !== undefined) patch.toleranceMinutes = dto.toleranceMinutes;
+    if (dto.requireNoteWhenLate !== undefined) patch.requireNoteWhenLate = dto.requireNoteWhenLate;
+    if (dto.workingDays !== undefined) patch.workingDays = dto.workingDays;
+    return this.attendances.updateSettings(patch);
+  }
+}

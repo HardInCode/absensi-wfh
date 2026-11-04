@@ -25,3 +25,14 @@ export function wibDateString(date: Date = new Date()): string {
   const p = wibParts(date);
   return `${p.year}-${p.month}-${p.day}`;
 }
+
+/** Menit sejak 00:00 WIB (0-1439). Detik diabaikan, sama dengan yang tampil di jam HH:mm. */
+export function wibMinutesOfDay(date: Date = new Date()): number {
+  const p = wibParts(date);
+  return Number(p.hour) * 60 + Number(p.minute);
+}
+
+/** Hari dalam seminggu menurut kalender WIB: 0 = Minggu ... 6 = Sabtu. */
+export function wibDayOfWeek(date: Date = new Date()): number {
+  return new Date(`${wibDateString(date)}T00:00:00Z`).getUTCDay();
+}

@@ -5,6 +5,7 @@ import {
   Header,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   StreamableFile,
@@ -31,9 +32,11 @@ import {
   AttendanceAdminListResponseDto,
   AttendanceListResponseDto,
   AttendanceResponseDto,
+  AttendanceSettingsResponseDto,
   CreateAttendanceDto,
   QueryAttendancesDto,
   QueryMyAttendancesDto,
+  UpdateAttendanceSettingsDto,
 } from './dto/attendance.dto';
 
 @ApiTags('attendances')
@@ -77,12 +80,25 @@ export class AttendancesController {
     return this.attendances.today(user);
   }
 
-  // KOMPAT FRONTEND: 'me' adalah alias dari 'my' (frontend Fase 3/4 memanggil /attendances/me).
   @Get(['my', 'me'])
   @Roles(Role.EMPLOYEE)
   @ApiOkResponse({ type: AttendanceListResponseDto })
   mine(@CurrentUser() user: AuthUser, @Query() query: QueryMyAttendancesDto) {
     return this.attendances.mine(user, query);
+  }
+
+  /** Tanpa @Roles: semua user login (EMPLOYEE dan ADMIN_HRD), sama seperti endpoint photo. */
+  @Get('settings')
+  @ApiOkResponse({ type: AttendanceSettingsResponseDto })
+  getSettings() {
+    return this.attendances.getSettings();
+  }
+
+  @Patch('settings')
+  @Roles(Role.ADMIN_HRD)
+  @ApiOkResponse({ type: AttendanceSettingsResponseDto })
+  updateSettings(@Body() dto: UpdateAttendanceSettingsDto) {
+    return this.attendances.updateSettings(dto);
   }
 
   @Get()
@@ -104,4 +120,3 @@ export class AttendancesController {
     return new StreamableFile(stream, { type: mime, length: size, disposition: 'inline' });
   }
 }
-

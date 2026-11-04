@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { buildTypeOrmOptions, validateAttendanceServiceEnv } from '@app/common';
 import { AttendancesModule } from './attendances/attendances.module';
+import { AttendanceSettings } from './attendances/entities/attendance-settings.entity';
 import { Attendance } from './attendances/entities/attendance.entity';
 
 @Module({
@@ -15,10 +16,9 @@ import { Attendance } from './attendances/entities/attendance.entity';
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) =>
-        buildTypeOrmOptions(config, [Attendance]),
+        buildTypeOrmOptions(config, [Attendance, AttendanceSettings]),
     }),
     AttendancesModule,
   ],
 })
 export class AttendanceServiceModule {}
-

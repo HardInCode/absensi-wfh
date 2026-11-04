@@ -5,9 +5,11 @@ import {
   ATTENDANCE_SERVICE,
   AttendancePattern,
   AttendanceRecord,
+  AttendanceSettingsRecord,
   CreateAttendancePayload,
   ListAttendancesPayload,
   PaginatedResult,
+  UpdateAttendanceSettingsPayload,
   sendRpc,
 } from '@app/common';
 
@@ -50,5 +52,18 @@ export class AttendanceServiceClient {
   findOne(id: string) {
     return this.call<AttendanceRecord, { id: string }>(AttendancePattern.FIND_ONE, { id });
   }
-}
 
+  getSettings() {
+    return this.call<AttendanceSettingsRecord, Record<string, never>>(
+      AttendancePattern.GET_SETTINGS,
+      {},
+    );
+  }
+
+  updateSettings(payload: UpdateAttendanceSettingsPayload) {
+    return this.call<AttendanceSettingsRecord, UpdateAttendanceSettingsPayload>(
+      AttendancePattern.UPDATE_SETTINGS,
+      payload,
+    );
+  }
+}

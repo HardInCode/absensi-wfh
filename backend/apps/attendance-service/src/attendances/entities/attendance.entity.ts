@@ -6,6 +6,7 @@ import {
   PrimaryGeneratedColumn,
   Unique,
 } from 'typeorm';
+import { AttendanceStatus } from '@app/common';
 
 @Entity({ name: 'attendances' })
 @Unique('UQ_attendance_employee_date', ['employeeId', 'attendanceDate'])
@@ -14,7 +15,7 @@ export class Attendance {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  /** Referensi lunak ke employees.id (tanpa FK lintas service). */
+  /** Referensi lunak ke employees.id (tanpa FK fisik lintas service). */
   @Column({ name: 'employee_id', type: 'varchar', length: 36 })
   employeeId: string;
 
@@ -31,7 +32,17 @@ export class Attendance {
   @Column({ type: 'varchar', length: 500, nullable: true })
   notes: string | null;
 
+  /** Dihitung & disimpan saat absen. Tidak dihitung ulang saat pengaturan berubah. */
+  @Column({
+    type: 'enum',
+    enum: AttendanceStatus,
+    default: AttendanceStatus.ON_TIME,
+  })
+  status: AttendanceStatus;
+
+  @Column({ name: 'late_minutes', type: 'int', default: 0 })
+  lateMinutes: number;
+
   @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt: Date;
 }
-

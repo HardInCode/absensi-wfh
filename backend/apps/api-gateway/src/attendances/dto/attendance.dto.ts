@@ -1,6 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, TransformFnParams, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  ArrayUnique,
+  IsArray,
+  IsBoolean,
   IsInt,
   IsOptional,
   IsString,
@@ -10,6 +15,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { AttendanceStatus, HM_REGEX } from '@app/common';
 
 const trim = ({ value }: TransformFnParams) =>
   typeof value === 'string' ? value.trim() : value;
@@ -85,6 +91,56 @@ export class QueryAttendancesDto extends QueryMyAttendancesDto {
   employee_name?: string;
 }
 
+/** PATCH parsial: kirim hanya field yang ingin diubah. */
+export class UpdateAttendanceSettingsDto {
+  @ApiPropertyOptional({ example: '06:00', description: 'Jam mulai absen diperbolehkan (HH:mm WIB)' })
+  @IsOptional()
+  @IsString({ message: 'earliestCheckIn harus berformat HH:mm, contoh 06:00' })
+  @Matches(HM_REGEX, { message: 'earliestCheckIn harus berformat HH:mm, contoh 06:00' })
+  earliestCheckIn?: string;
+
+  @ApiPropertyOptional({ example: '08:00', description: 'Batas jam masuk (HH:mm WIB)' })
+  @IsOptional()
+  @IsString({ message: 'defaultCutoffTime harus berformat HH:mm, contoh 08:00' })
+  @Matches(HM_REGEX, { message: 'defaultCutoffTime harus berformat HH:mm, contoh 08:00' })
+  defaultCutoffTime?: string;
+
+  @ApiPropertyOptional({ example: 15, minimum: 0, maximum: 120 })
+  @IsOptional()
+  @IsInt({ message: 'toleranceMinutes harus bilangan bulat 0 sampai 120' })
+  @Min(0, { message: 'toleranceMinutes harus bilangan bulat 0 sampai 120' })
+  @Max(120, { message: 'toleranceMinutes harus bilangan bulat 0 sampai 120' })
+  toleranceMinutes?: number;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean({ message: 'requireNoteWhenLate harus berupa true atau false' })
+  requireNoteWhenLate?: boolean;
+
+  @ApiPropertyOptional({
+    type: [Number],
+    example: [1, 2, 3, 4, 5],
+    description: '0 = Minggu ... 6 = Sabtu, tanpa duplikat, minimal 1 hari',
+  })
+  @IsOptional()
+  @IsArray({ message: 'workingDays harus berupa array angka 0 sampai 6' })
+  @ArrayMinSize(1, { message: 'workingDays harus berisi minimal 1 hari' })
+  @ArrayMaxSize(7, { message: 'workingDays maksimal 7 hari' })
+  @ArrayUnique({ message: 'workingDays tidak boleh berisi hari yang sama dua kali' })
+  @IsInt({ each: true, message: 'workingDays hanya boleh berisi angka 0 (Minggu) sampai 6 (Sabtu)' })
+  @Min(0, { each: true, message: 'workingDays hanya boleh berisi angka 0 (Minggu) sampai 6 (Sabtu)' })
+  @Max(6, { each: true, message: 'workingDays hanya boleh berisi angka 0 (Minggu) sampai 6 (Sabtu)' })
+  workingDays?: number[];
+}
+
+export class AttendanceSettingsResponseDto {
+  @ApiProperty({ example: '00:00' }) earliestCheckIn: string;
+  @ApiProperty({ example: '08:00' }) defaultCutoffTime: string;
+  @ApiProperty({ example: 15 }) toleranceMinutes: number;
+  @ApiProperty({ example: false }) requireNoteWhenLate: boolean;
+  @ApiProperty({ type: [Number], example: [0, 1, 2, 3, 4, 5, 6] }) workingDays: number[];
+}
+
 export class AttendanceResponseDto {
   @ApiProperty() id: string;
   @ApiProperty() employeeId: string;
@@ -93,6 +149,10 @@ export class AttendanceResponseDto {
   @ApiProperty() checkInAt: string;
   @ApiProperty({ example: '/api/attendances/<id>/photo' }) photoUrl: string;
   @ApiProperty({ nullable: true }) notes: string | null;
+  @ApiProperty({ enum: AttendanceStatus, enumName: 'AttendanceStatus' })
+  status: AttendanceStatus;
+  @ApiProperty({ example: 0, description: 'Menit terlambat dari batas jam masuk dasar' })
+  lateMinutes: number;
 }
 
 export class AttendanceEmployeeDto {
@@ -122,4 +182,3 @@ export class AttendanceAdminListResponseDto {
   @ApiProperty({ type: [AttendanceAdminResponseDto] }) data: AttendanceAdminResponseDto[];
   @ApiProperty({ type: AttendanceMetaDto }) meta: AttendanceMetaDto;
 }
-

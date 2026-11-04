@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -7,11 +8,18 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 import {
   AttendanceRecord,
+  AttendanceStatus,
   CreateAttendancePayload,
+  DAY_NAMES_ID,
+  formatWorkingDays,
+  hmToMinutes,
   ListAttendancesPayload,
   PaginatedResult,
   wibDateString,
+  wibDayOfWeek,
+  wibMinutesOfDay,
 } from '@app/common';
+import { AttendanceSettingsService } from './attendance-settings.service';
 import { Attendance } from './entities/attendance.entity';
 
 const toRecord = (a: Attendance): AttendanceRecord => ({
@@ -22,6 +30,8 @@ const toRecord = (a: Attendance): AttendanceRecord => ({
   createdAt: a.createdAt,
   photoPath: a.photoPath,
   notes: a.notes,
+  status: a.status,
+  lateMinutes: a.lateMinutes,
 });
 
 const ALREADY_SUBMITTED = 'Attendance already submitted today';
@@ -30,6 +40,7 @@ const ALREADY_SUBMITTED = 'Attendance already submitted today';
 export class AttendancesService {
   constructor(
     @InjectRepository(Attendance) private readonly repo: Repository<Attendance>,
+    private readonly settings: AttendanceSettingsService,
   ) {}
 
   /** Waktu dan tanggal absen SELALU dibuat di sini. Payload tidak membawa waktu. */
@@ -43,6 +54,35 @@ export class AttendancesService {
     });
     if (existing) throw new ConflictException(ALREADY_SUBMITTED);
 
+    // ---- Aturan jam kerja (dibaca dari pengaturan saat ini) ----
+    const s = await this.settings.get();
+    const minutesNow = wibMinutesOfDay(now);
+    const dayOfWeek = wibDayOfWeek(now);
+
+    if (!s.workingDays.includes(dayOfWeek)) {
+      throw new BadRequestException(
+        `Hari ini (${DAY_NAMES_ID[dayOfWeek]}) bukan hari kerja. ` +
+          `Absensi hanya dapat dilakukan pada hari: ${formatWorkingDays(s.workingDays)}.`,
+      );
+    }
+    if (minutesNow < hmToMinutes(s.earliestCheckIn)) {
+      throw new BadRequestException(
+        `Absensi belum dibuka. Absen dapat dilakukan mulai pukul ${s.earliestCheckIn} WIB.`,
+      );
+    }
+
+    const cutoff = hmToMinutes(s.defaultCutoffTime);
+    const isLate = minutesNow > cutoff + s.toleranceMinutes;
+    const lateMinutes = isLate ? minutesNow - cutoff : 0; // dari cut-off dasar, bukan batas toleransi
+    const notes = p.notes?.trim() || null;
+
+    if (isLate && s.requireNoteWhenLate && !notes) {
+      throw new BadRequestException(
+        `Anda terlambat ${lateMinutes} menit (batas masuk ${s.defaultCutoffTime} WIB, ` +
+          `toleransi ${s.toleranceMinutes} menit). Catatan wajib diisi untuk absen terlambat.`,
+      );
+    }
+
     try {
       const saved = await this.repo.save(
         this.repo.create({
@@ -50,7 +90,9 @@ export class AttendancesService {
           checkInAt: now,
           attendanceDate,
           photoPath: p.photoPath,
-          notes: p.notes?.trim() || null,
+          notes,
+          status: isLate ? AttendanceStatus.LATE : AttendanceStatus.ON_TIME,
+          lateMinutes,
           createdAt: now,
         }),
       );
@@ -110,4 +152,3 @@ export class AttendancesService {
     };
   }
 }
-
