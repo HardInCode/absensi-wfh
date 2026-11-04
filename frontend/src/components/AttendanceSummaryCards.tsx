@@ -184,3 +184,4 @@ export function AttendanceSummaryCards({ date, displayDate }: Props) {
     </section>
   );
 }
+

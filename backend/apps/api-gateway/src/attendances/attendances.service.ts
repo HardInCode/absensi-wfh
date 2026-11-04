@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { ReadStream } from 'fs';
 import {
   AttendanceRecord,
@@ -111,6 +112,9 @@ export class AttendancesService {
     const type = detectImageType(file.buffer);
     if (!type) throw new BadRequestException('Photo must be a JPEG, PNG, or WEBP image');
 
+    // Hash dihitung dari byte yang diterima server, bukan dari data klien.
+    const photoHash = createHash('sha256').update(file.buffer).digest('hex');
+
     const filename = await this.storage.save(file.buffer, type.ext);
     try {
       // employeeId SELALU dari token, tidak pernah dari body.
@@ -118,13 +122,14 @@ export class AttendancesService {
         employeeId: user.id,
         photoPath: filename,
         notes: dto.notes,
+        photoHash,
       });
       return toAttendanceView(record);
     } catch (err) {
       if (err instanceof GatewayTimeoutException) {
         this.logger.warn(`Timeout saat menyimpan absensi; file ${filename} dipertahankan`);
       } else {
-        await this.storage.remove(filename); // rollback file (termasuk saat 400 aturan jam kerja)
+        await this.storage.remove(filename); // rollback file (termasuk 400 aturan jam kerja dan foto duplikat)
       }
       throw err;
     }

@@ -19,6 +19,8 @@ export interface CreateAttendancePayload {
   employeeId: string;
   photoPath: string;
   notes?: string | null;
+  /** SHA-256 (hex, 64 karakter) isi file, dihitung gateway. Dipakai untuk deteksi foto duplikat. */
+  photoHash?: string | null;
 }
 
 /** Dipakai oleh /attendances (HRD), /attendances/export, dan /attendances/my (employeeIds = [id dari token]). */

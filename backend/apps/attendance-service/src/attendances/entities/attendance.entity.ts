@@ -11,6 +11,7 @@ import { AttendanceStatus } from '@app/common';
 @Entity({ name: 'attendances' })
 @Unique('UQ_attendance_employee_date', ['employeeId', 'attendanceDate'])
 @Index('IDX_attendance_date', ['attendanceDate'])
+@Index('IDX_attendance_photo_hash', ['photoHash'])
 export class Attendance {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -28,6 +29,10 @@ export class Attendance {
 
   @Column({ name: 'photo_path', type: 'varchar', length: 255 })
   photoPath: string;
+
+  /** SHA-256 isi foto (hex). Null untuk data lama sebelum fitur anti-duplikat. */
+  @Column({ name: 'photo_hash', type: 'varchar', length: 64, nullable: true })
+  photoHash: string | null;
 
   @Column({ type: 'varchar', length: 500, nullable: true })
   notes: string | null;

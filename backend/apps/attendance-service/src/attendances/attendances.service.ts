@@ -85,6 +85,18 @@ export class AttendancesService {
       );
     }
 
+    // ---- Deteksi foto duplikat (lintas karyawan, hanya terhadap absen yang tersimpan) ----
+    const photoHash = p.photoHash?.trim().toLowerCase() || null;
+    if (photoHash) {
+      const sameHash = await this.repo.findOne({
+        select: { id: true },
+        where: { photoHash },
+      });
+      if (sameHash) {
+        throw new BadRequestException('Foto ini sudah pernah digunakan. Ambil foto baru.');
+      }
+    }
+
     try {
       const saved = await this.repo.save(
         this.repo.create({
@@ -92,6 +104,7 @@ export class AttendancesService {
           checkInAt: now,
           attendanceDate,
           photoPath: p.photoPath,
+          photoHash,
           notes,
           status: isLate ? AttendanceStatus.LATE : AttendanceStatus.ON_TIME,
           lateMinutes,
