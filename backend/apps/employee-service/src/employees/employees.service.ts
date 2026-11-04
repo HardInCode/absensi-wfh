@@ -1,0 +1,182 @@
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import * as bcrypt from 'bcrypt';
+import { Brackets, FindOptionsWhere, QueryFailedError, Repository } from 'typeorm';
+import {
+  CreateEmployeeDto,
+  EmployeeView,
+  PaginatedResult,
+  QueryEmployeesDto,
+  UpdateEmployeeDto,
+} from '@app/common';
+import { toEmployeeView } from './employee.mapper';
+import { Employee } from './entities/employee.entity';
+
+const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
+
+@Injectable()
+export class EmployeesService {
+  constructor(
+    @InjectRepository(Employee) private readonly repo: Repository<Employee>,
+    private readonly config: ConfigService,
+  ) {}
+
+  private get rounds(): number {
+    return this.config.getOrThrow<number>('BCRYPT_ROUNDS');
+  }
+
+  async create(dto: CreateEmployeeDto): Promise<EmployeeView> {
+    const nik = dto.nik.trim();
+    const email = dto.email.trim().toLowerCase();
+    await this.assertUnique({ nik, email });
+
+    const passwordHash = await bcrypt.hash(dto.password, this.rounds);
+    try {
+      const saved = await this.repo.save(
+        this.repo.create({
+          nik,
+          fullName: dto.fullName,
+          email,
+          passwordHash,
+          position: dto.position,
+          role: dto.role,
+          isActive: dto.isActive ?? true,
+        }),
+      );
+      return toEmployeeView(saved);
+    } catch (e) {
+      throw this.translateDbError(e);
+    }
+  }
+
+  async findAll(query: QueryEmployeesDto): Promise<PaginatedResult<EmployeeView>> {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+
+    const qb = this.repo.createQueryBuilder('e');
+    if (query.search) {
+      const like = `%${escapeLike(query.search)}%`;
+      qb.andWhere(
+        new Brackets((w) => {
+          w.where('e.fullName LIKE :like', { like })
+            .orWhere('e.nik LIKE :like')
+            .orWhere('e.email LIKE :like');
+        }),
+      );
+    }
+    if (query.role) qb.andWhere('e.role = :role', { role: query.role });
+    if (query.isActive !== undefined) {
+      qb.andWhere('e.isActive = :isActive', { isActive: query.isActive });
+    }
+
+    const [rows, total] = await qb
+      .orderBy('e.createdAt', 'DESC')
+      .addOrderBy('e.id', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data: rows.map(toEmployeeView),
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  async findOne(id: string): Promise<EmployeeView> {
+    return toEmployeeView(await this.getEntity(id));
+  }
+
+  async update(id: string, dto: UpdateEmployeeDto): Promise<EmployeeView> {
+    const employee = await this.getEntity(id);
+
+    if (dto.email !== undefined) {
+      const email = dto.email.trim().toLowerCase();
+      if (email !== employee.email) {
+        await this.assertUnique({ email }, id);
+        employee.email = email;
+      }
+    }
+    if (dto.fullName !== undefined) employee.fullName = dto.fullName;
+    if (dto.position !== undefined) employee.position = dto.position;
+    if (dto.role !== undefined) employee.role = dto.role;
+    if (dto.isActive !== undefined) employee.isActive = dto.isActive;
+    if (dto.password !== undefined) {
+      employee.passwordHash = await bcrypt.hash(dto.password, this.rounds);
+    }
+
+    try {
+      return toEmployeeView(await this.repo.save(employee));
+    } catch (e) {
+      throw this.translateDbError(e);
+    }
+  }
+
+  /** Soft delete: isActive = false. */
+  async remove(id: string): Promise<EmployeeView> {
+    const employee = await this.getEntity(id);
+    employee.isActive = false;
+    return toEmployeeView(await this.repo.save(employee));
+  }
+
+  // ---- dipakai AuthService (bukan endpoint RPC) ----
+
+  findByEmailWithPassword(email: string): Promise<Employee | null> {
+    return this.repo
+      .createQueryBuilder('e')
+      .addSelect('e.passwordHash')
+      .where('e.email = :email', { email: email.trim().toLowerCase() })
+      .getOne();
+  }
+
+  findEntityOrNull(id: string): Promise<Employee | null> {
+    return this.repo.findOneBy({ id });
+  }
+
+  // ---- private ----
+
+  private async getEntity(id: string): Promise<Employee> {
+    const employee = await this.repo.findOneBy({ id });
+    if (!employee) throw new NotFoundException('Employee not found');
+    return employee;
+  }
+
+  private async assertUnique(
+    fields: { nik?: string; email?: string },
+    excludeId?: string,
+  ): Promise<void> {
+    const where: FindOptionsWhere<Employee>[] = [];
+    if (fields.nik) where.push({ nik: fields.nik });
+    if (fields.email) where.push({ email: fields.email });
+    if (where.length === 0) return;
+
+    const found = await this.repo.find({
+      where,
+      select: { id: true, nik: true, email: true },
+    });
+    for (const f of found) {
+      if (f.id === excludeId) continue;
+      if (fields.nik && f.nik.toLowerCase() === fields.nik.toLowerCase()) {
+        throw new ConflictException('NIK already registered');
+      }
+      if (fields.email && f.email.toLowerCase() === fields.email.toLowerCase()) {
+        throw new ConflictException('Email already registered');
+      }
+    }
+  }
+
+  private translateDbError(e: unknown): unknown {
+    if (
+      e instanceof QueryFailedError &&
+      (e.driverError as { code?: string } | undefined)?.code === 'ER_DUP_ENTRY'
+    ) {
+      return new ConflictException('NIK or email already registered');
+    }
+    return e;
+  }
+}
+

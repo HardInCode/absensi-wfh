@@ -1,0 +1,40 @@
+import { Logger, ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
+import { ApiGatewayModule } from './api-gateway.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(ApiGatewayModule);
+  const config = app.get(ConfigService);
+
+  app.setGlobalPrefix('api');
+  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+  app.enableCors({
+    origin: config.getOrThrow<string>('FRONTEND_URL'),
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  });
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  app.enableShutdownHooks();
+
+  const document = SwaggerModule.createDocument(
+    app,
+    new DocumentBuilder()
+      .setTitle('Absensi WFH API')
+      .setDescription('API Gateway: satu-satunya pintu masuk publik')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build(),
+  );
+  SwaggerModule.setup('api/docs', app, document, {
+    swaggerOptions: { persistAuthorization: true },
+  });
+
+  const port = config.getOrThrow<number>('GATEWAY_PORT');
+  await app.listen(port);
+  Logger.log(`api-gateway listening on :${port} (Swagger: /api/docs)`, 'Bootstrap');
+}
+
+bootstrap();
+
