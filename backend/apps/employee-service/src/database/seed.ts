@@ -31,16 +31,25 @@ const DEMO_ACCOUNTS = [
 async function seed() {
   const logger = new Logger('Seed');
   const app = await NestFactory.createApplicationContext(EmployeeServiceModule, {
-    logger: ['error', 'warn'],
+    logger: ['log', 'error', 'warn'],
   });
   try {
     const repo = app.get<Repository<Employee>>(getRepositoryToken(Employee));
     const rounds = app.get(ConfigService).getOrThrow<number>('BCRYPT_ROUNDS');
 
     for (const acc of DEMO_ACCOUNTS) {
-      const exists = await repo.findOneBy({ email: acc.email });
+      const exists = await repo.findOne({
+        where: { email: acc.email },
+        select: { id: true, email: true, passwordHash: true },
+      });
       if (exists) {
-        logger.log(`Lewati (sudah ada): ${acc.email}`);
+        if (!exists.passwordHash || exists.passwordHash.length < 20) {
+          exists.passwordHash = await bcrypt.hash(acc.password, rounds);
+          await repo.save(exists);
+          logger.log(`Password demo diperbarui: ${acc.email}`);
+        } else {
+          logger.log(`Lewati (sudah ada): ${acc.email}`);
+        }
         continue;
       }
       await repo.save(
