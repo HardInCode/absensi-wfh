@@ -67,9 +67,14 @@ export class EmployeesService {
         new Brackets((w) => {
           w.where('e.fullName LIKE :like', { like })
             .orWhere('e.nik LIKE :like')
-            .orWhere('e.email LIKE :like');
+            .orWhere('e.email LIKE :like')
+            .orWhere('e.position LIKE :like');
         }),
       );
+    }
+    if (query.position) {
+      const posLike = `%${escapeLike(query.position)}%`;
+      qb.andWhere('e.position LIKE :posLike', { posLike });
     }
     if (query.role) qb.andWhere('e.role = :role', { role: query.role });
     if (query.isActive !== undefined) {
@@ -141,7 +146,7 @@ export class EmployeesService {
 
   // ---- dipakai attendance lewat gateway (Fase 5B) ----
 
-  /** ID karyawan (aktif maupun nonaktif) yang nama atau NIK-nya cocok. */
+  /** ID karyawan (aktif maupun nonaktif) yang nama, NIK, atau jabatannya cocok. */
   async searchIds(search: string, limit: number): Promise<string[]> {
     const like = `%${escapeLike(search.trim())}%`;
     const rows = await this.repo
@@ -149,6 +154,7 @@ export class EmployeesService {
       .select('e.id', 'id')
       .where('e.fullName LIKE :like', { like })
       .orWhere('e.nik LIKE :like')
+      .orWhere('e.position LIKE :like')
       .orderBy('e.id', 'ASC')
       .limit(limit)
       .getRawMany<{ id: string }>();

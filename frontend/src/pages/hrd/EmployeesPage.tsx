@@ -170,7 +170,7 @@ export function EmployeesPage() {
               type="search"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Nama, NIK, atau email"
+              placeholder="Nama, NIK, email, atau jabatan"
               className="pl-9"
               autoComplete="off"
             />

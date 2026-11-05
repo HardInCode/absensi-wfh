@@ -94,12 +94,19 @@ export class QueryEmployeesDto {
   @Max(100)
   limit: number = 10;
 
-  @ApiPropertyOptional({ description: 'Cari di nama, NIK, atau email' })
+  @ApiPropertyOptional({ description: 'Cari di nama, NIK, email, atau jabatan' })
   @IsOptional()
   @Transform(trim)
   @IsString()
   @MaxLength(100)
   search?: string;
+
+  @ApiPropertyOptional({ description: 'Filter jabatan' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(100)
+  position?: string;
 
   @ApiPropertyOptional({ enum: Role })
   @IsOptional()

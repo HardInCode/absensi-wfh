@@ -239,6 +239,7 @@ export interface EmployeeQuery {
   search: string;
   role?: RoleFilter;
   status?: ActiveStatusFilter;
+  position?: string;
 }
 
 export async function fetchEmployees(query: EmployeeQuery, signal?: AbortSignal): Promise<Paged<Employee>> {
@@ -247,6 +248,7 @@ export async function fetchEmployees(query: EmployeeQuery, signal?: AbortSignal)
     limit: query.limit,
   };
   if (query.search) params.search = query.search;
+  if (query.position) params.position = query.position;
   if (query.role) params.role = query.role;
   if (query.status === "active") params.isActive = true;
   if (query.status === "inactive") params.isActive = false;
