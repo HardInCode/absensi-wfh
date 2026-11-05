@@ -1,0 +1,338 @@
+###############################################################################
+# Absensi WFH - koleksi request untuk ekstensi VS Code "REST Client"
+# (humao.rest-client). Klik "Send Request" di atas tiap request.
+#
+# Cara pakai:
+#   1. Pastikan MySQL, tiga service backend, dan seeder sudah jalan.
+#   2. Kirim "loginAdmin" dan "loginEmployee" lebih dulu. Token tersimpan otomatis
+#      ke variabel di bawah (variabel request hanya terisi setelah request itu
+#      pernah dikirim pada sesi VS Code ini).
+#   3. Request lain yang butuh id (karyawan, absensi) memakai hasil request
+#      bernama sebelumnya. Kirim urutannya dari atas ke bawah.
+#
+# Foto untuk "submitAttendance": letakkan satu berkas JPG di
+# ./samples/bukti.jpg (relatif terhadap berkas ini), atau ubah path-nya.
+###############################################################################
+
+@baseUrl = http://localhost:3000/api
+
+# Token diambil dari respons login (JSONPath).
+@adminToken = {{loginAdmin.response.body.$.accessToken}}
+@employeeToken = {{loginEmployee.response.body.$.accessToken}}
+
+# Id diambil dari respons request bernama.
+@newEmployeeId = {{createEmployee.response.body.$.id}}
+@attendanceId = {{listAttendances.response.body.$.data[0].id}}
+
+###############################################################################
+# 0. UMUM
+###############################################################################
+
+### Waktu server (publik)
+GET {{baseUrl}}/time
+
+###############################################################################
+# 1. AUTH
+###############################################################################
+
+### Login sebagai Admin HRD
+# @name loginAdmin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@company.test",
+  "password": "Admin123!"
+}
+
+### Login sebagai Karyawan
+# @name loginEmployee
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "budi@company.test",
+  "password": "Karyawan123!"
+}
+
+### Profil user dari token (Admin)
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{adminToken}}
+
+### Profil user dari token (Karyawan)
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{employeeToken}}
+
+### Login gagal (password salah) - harapkan 401
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "budi@company.test",
+  "password": "salah-total"
+}
+
+###############################################################################
+# 2. MASTER KARYAWAN (ADMIN_HRD)
+###############################################################################
+
+### Daftar karyawan (paginasi + pencarian)
+GET {{baseUrl}}/employees?page=1&limit=10&search=budi
+Authorization: Bearer {{adminToken}}
+
+### Daftar karyawan: hanya yang aktif dan ber-role EMPLOYEE
+GET {{baseUrl}}/employees?page=1&limit=10&role=EMPLOYEE&isActive=true
+Authorization: Bearer {{adminToken}}
+
+### Tambah karyawan
+# Ubah nik dan email jika sudah pernah dibuat (keduanya unik).
+# @name createEmployee
+POST {{baseUrl}}/employees
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "nik": "2000000099",
+  "fullName": "Sari Demo",
+  "email": "sari@company.test",
+  "password": "Karyawan123!",
+  "position": "Staff Operasional",
+  "role": "EMPLOYEE"
+}
+
+### Detail karyawan (id dari request createEmployee)
+GET {{baseUrl}}/employees/{{newEmployeeId}}
+Authorization: Bearer {{adminToken}}
+
+### Ubah karyawan (parsial)
+PATCH {{baseUrl}}/employees/{{newEmployeeId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "position": "Senior Staff Operasional"
+}
+
+### Nonaktifkan karyawan (soft delete, isActive = false)
+DELETE {{baseUrl}}/employees/{{newEmployeeId}}
+Authorization: Bearer {{adminToken}}
+
+### Aktifkan kembali karyawan
+PATCH {{baseUrl}}/employees/{{newEmployeeId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "isActive": true
+}
+
+### Karyawan mencoba membuka master karyawan - harapkan 403
+GET {{baseUrl}}/employees
+Authorization: Bearer {{employeeToken}}
+
+###############################################################################
+# 3. PENGATURAN ABSENSI
+###############################################################################
+
+### Baca pengaturan (semua user login)
+GET {{baseUrl}}/attendances/settings
+Authorization: Bearer {{employeeToken}}
+
+### Ubah pengaturan (ADMIN_HRD, parsial)
+# Hati-hati: workingDays [1..5] membuat absen akhir pekan ditolak (400), dan
+# earliestCheckIn menolak absen sebelum jam tersebut. Pengaturan hanya berlaku
+# untuk absensi berikutnya; absensi lama tidak dihitung ulang.
+PATCH {{baseUrl}}/attendances/settings
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "earliestCheckIn": "06:00",
+  "defaultCutoffTime": "09:00",
+  "toleranceMinutes": 15,
+  "requireNoteWhenLate": true,
+  "workingDays": [1, 2, 3, 4, 5]
+}
+
+### Kembalikan ke nilai longgar untuk pengujian (semua hari, semua jam)
+PATCH {{baseUrl}}/attendances/settings
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "earliestCheckIn": "00:00",
+  "defaultCutoffTime": "08:00",
+  "toleranceMinutes": 15,
+  "requireNoteWhenLate": false,
+  "workingDays": [0, 1, 2, 3, 4, 5, 6]
+}
+
+### Validasi gagal (format jam salah) - harapkan 400
+PATCH {{baseUrl}}/attendances/settings
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "defaultCutoffTime": "9 pagi"
+}
+
+### Karyawan mencoba mengubah pengaturan - harapkan 403
+PATCH {{baseUrl}}/attendances/settings
+Authorization: Bearer {{employeeToken}}
+Content-Type: application/json
+
+{
+  "toleranceMinutes": 120
+}
+
+###############################################################################
+# 4. ABSENSI KARYAWAN (EMPLOYEE)
+###############################################################################
+
+### Kirim absen (multipart: photo wajib, notes opsional)
+# Waktu TIDAK dikirim: server yang menentukan. Satu absen per hari (kedua = 409).
+# @name submitAttendance
+POST {{baseUrl}}/attendances
+Authorization: Bearer {{employeeToken}}
+Content-Type: multipart/form-data; boundary=----AbsensiBoundary
+
+------AbsensiBoundary
+Content-Disposition: form-data; name="photo"; filename="bukti.jpg"
+Content-Type: image/jpeg
+
+< ./samples/bukti.jpg
+------AbsensiBoundary
+Content-Disposition: form-data; name="notes"
+
+WFH, mengerjakan laporan bulanan.
+------AbsensiBoundary--
+
+### Absen tanpa foto - harapkan 400
+POST {{baseUrl}}/attendances
+Authorization: Bearer {{employeeToken}}
+Content-Type: multipart/form-data; boundary=----AbsensiBoundary
+
+------AbsensiBoundary
+Content-Disposition: form-data; name="notes"
+
+Tanpa foto
+------AbsensiBoundary--
+
+### Absensi hari ini (null jika belum absen)
+GET {{baseUrl}}/attendances/today
+Authorization: Bearer {{employeeToken}}
+
+### Riwayat absensi saya
+GET {{baseUrl}}/attendances/my?page=1&limit=10
+Authorization: Bearer {{employeeToken}}
+
+### Riwayat absensi saya (alias /me) dengan filter tanggal
+GET {{baseUrl}}/attendances/me?page=1&limit=10&dateFrom=2026-11-01&dateTo=2026-11-30
+Authorization: Bearer {{employeeToken}}
+
+### Admin HRD tidak boleh absen - harapkan 403
+POST {{baseUrl}}/attendances
+Authorization: Bearer {{adminToken}}
+Content-Type: multipart/form-data; boundary=----AbsensiBoundary
+
+------AbsensiBoundary
+Content-Disposition: form-data; name="photo"; filename="bukti.jpg"
+Content-Type: image/jpeg
+
+< ./samples/bukti.jpg
+------AbsensiBoundary--
+
+###############################################################################
+# 5. MONITORING ABSENSI (ADMIN_HRD, hanya lihat)
+###############################################################################
+
+### Daftar absensi semua karyawan (paginasi)
+# @name listAttendances
+GET {{baseUrl}}/attendances?page=1&limit=10
+Authorization: Bearer {{adminToken}}
+
+### Filter rentang tanggal
+GET {{baseUrl}}/attendances?page=1&limit=10&dateFrom=2026-11-01&dateTo=2026-11-30
+Authorization: Bearer {{adminToken}}
+
+### Filter nama atau NIK (alias frontend: employee_name)
+GET {{baseUrl}}/attendances?page=1&limit=10&search=budi
+Authorization: Bearer {{adminToken}}
+
+### Filter status terlambat
+GET {{baseUrl}}/attendances?page=1&limit=10&status=LATE
+Authorization: Bearer {{adminToken}}
+
+### Filter status tepat waktu
+GET {{baseUrl}}/attendances?page=1&limit=10&status=ON_TIME
+Authorization: Bearer {{adminToken}}
+
+### Gabungan filter (alias snake_case yang dipakai frontend)
+GET {{baseUrl}}/attendances?page=1&limit=10&date_from=2026-11-01&date_to=2026-11-30&employee_name=budi&status=LATE
+Authorization: Bearer {{adminToken}}
+
+### Filter satu karyawan (UUID)
+GET {{baseUrl}}/attendances?page=1&limit=10&employeeId={{newEmployeeId}}
+Authorization: Bearer {{adminToken}}
+
+### Status tidak valid - harapkan 400
+GET {{baseUrl}}/attendances?status=TELAT
+Authorization: Bearer {{adminToken}}
+
+### Karyawan mencoba melihat daftar HRD - harapkan 403
+GET {{baseUrl}}/attendances
+Authorization: Bearer {{employeeToken}}
+
+###############################################################################
+# 6. RINGKASAN HARIAN (ADMIN_HRD)
+###############################################################################
+
+### Summary hari ini (WIB)
+GET {{baseUrl}}/attendances/summary
+Authorization: Bearer {{adminToken}}
+
+### Summary untuk tanggal tertentu
+GET {{baseUrl}}/attendances/summary?date=2026-11-04
+Authorization: Bearer {{adminToken}}
+
+### Format tanggal salah - harapkan 400
+GET {{baseUrl}}/attendances/summary?date=04-11-2026
+Authorization: Bearer {{adminToken}}
+
+###############################################################################
+# 7. EXPORT CSV (ADMIN_HRD)
+###############################################################################
+
+### Export semua (maks 5.000 baris)
+# Respons: text/csv, diawali UTF-8 BOM. Perhatikan header Content-Disposition
+# dan X-Export-Truncated (true jika data terpotong).
+GET {{baseUrl}}/attendances/export
+Authorization: Bearer {{adminToken}}
+
+### Export dengan filter
+GET {{baseUrl}}/attendances/export?dateFrom=2026-11-01&dateTo=2026-11-30&status=LATE&search=budi
+Authorization: Bearer {{adminToken}}
+
+### Karyawan mencoba export - harapkan 403
+GET {{baseUrl}}/attendances/export
+Authorization: Bearer {{employeeToken}}
+
+###############################################################################
+# 8. FOTO BUKTI
+###############################################################################
+
+### Foto absensi sebagai Admin HRD (id dari request listAttendances, baris pertama)
+GET {{baseUrl}}/attendances/{{attendanceId}}/photo
+Authorization: Bearer {{adminToken}}
+
+### Foto absensi sebagai pemilik (Karyawan)
+# Hanya berhasil jika absen tersebut milik budi@company.test.
+GET {{baseUrl}}/attendances/{{attendanceId}}/photo
+Authorization: Bearer {{employeeToken}}
+
+### Foto tanpa token - harapkan 401
+GET {{baseUrl}}/attendances/{{attendanceId}}/photo
+
+### Id bukan UUID - harapkan 400
+GET {{baseUrl}}/attendances/bukan-uuid/photo
+Authorization: Bearer {{adminToken}}
