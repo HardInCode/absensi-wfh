@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -98,8 +99,31 @@ export class EmployeesService {
     return toEmployeeView(await this.getEntity(id));
   }
 
+  /** Memastikan minimal ada satu Admin HRD aktif lain sebelum menurunkan role atau menonaktifkan. */
+  private async assertNotLastActiveAdmin(id: string): Promise<void> {
+    const otherActiveAdmins = await this.repo
+      .createQueryBuilder('e')
+      .where('e.role = :role', { role: Role.ADMIN_HRD })
+      .andWhere('e.isActive = :isActive', { isActive: true })
+      .andWhere('e.id != :id', { id })
+      .getCount();
+
+    if (otherActiveAdmins === 0) {
+      throw new BadRequestException('Minimal harus ada satu Admin HRD aktif.');
+    }
+  }
+
   async update(id: string, dto: UpdateEmployeeDto): Promise<EmployeeView> {
     const employee = await this.getEntity(id);
+
+    const isLosingAdminStatus =
+      employee.role === Role.ADMIN_HRD &&
+      employee.isActive &&
+      ((dto.role !== undefined && dto.role !== Role.ADMIN_HRD) || dto.isActive === false);
+
+    if (isLosingAdminStatus) {
+      await this.assertNotLastActiveAdmin(id);
+    }
 
     if (dto.email !== undefined) {
       const email = dto.email.trim().toLowerCase();
@@ -126,6 +150,11 @@ export class EmployeesService {
   /** Soft delete: isActive = false. */
   async remove(id: string): Promise<EmployeeView> {
     const employee = await this.getEntity(id);
+
+    if (employee.role === Role.ADMIN_HRD && employee.isActive) {
+      await this.assertNotLastActiveAdmin(id);
+    }
+
     employee.isActive = false;
     return toEmployeeView(await this.repo.save(employee));
   }

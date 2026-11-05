@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { validateGatewayEnv } from '@app/common';
 import { AttendancesModule } from './attendances/attendances.module';
 import { AuthModule } from './auth/auth.module';
@@ -14,6 +15,13 @@ import { TimeModule } from './time/time.module';
       envFilePath: ['.env'],
       validate: validateGatewayEnv,
     }),
+    ThrottlerModule.forRoot([
+      {
+        name: 'default',
+        ttl: 60000,
+        limit: 600,
+      },
+    ]),
     ServiceClientsModule,
     AuthModule,
     EmployeesModule,

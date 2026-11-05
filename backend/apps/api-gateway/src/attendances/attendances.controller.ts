@@ -22,7 +22,9 @@ import {
   ApiOkResponse,
   ApiProduces,
   ApiTags,
+  ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { memoryStorage } from 'multer';
 import { AuthUser, Role } from '@app/common';
@@ -52,6 +54,7 @@ export class AttendancesController {
 
   @Post()
   @Roles(Role.EMPLOYEE)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -64,6 +67,7 @@ export class AttendancesController {
     },
   })
   @ApiCreatedResponse({ type: AttendanceResponseDto })
+  @ApiTooManyRequestsResponse({ description: 'Terlalu banyak permintaan absensi. Silakan tunggu 1 menit.' })
   @UseInterceptors(
     FileInterceptor('photo', {
       storage: memoryStorage(),

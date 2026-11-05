@@ -298,6 +298,12 @@ Keduanya menggunakan DTO query yang sama (`QueryAttendancesDto` dan `ExportAtten
 - **Skema dibuat dengan `synchronize`.** Praktis untuk pengembangan, berisiko di produksi. Pengembangan: migrasi TypeORM.
 - **Export dibatasi 5.000 baris.** Data lebih banyak terpotong dan ditandai header `X-Export-Truncated: true`.
 - **Pencarian nama pada monitoring mencakup semua role**, tidak hanya karyawan.
+- **Token disimpan di `localStorage`** (`absensi.token`) tanpa refresh token (masa berlaku 8 jam). Pengembangan: cookie `httpOnly` dengan perlindungan CSRF.
+- **Rate limiting hanya pada login dan upload absen.** Batas global dibuat longgar.
+- **Swagger terbuka** di `/api/docs` untuk memudahkan peninjauan. Di produksi sebaiknya dinonaktifkan atau dilindungi.
+- **`JWT_SECRET` pada `.env.example` hanya contoh.** Ganti dengan string acak sebelum dipakai di luar pengembangan.
+- **Audit dependensi.** `npm audit` melaporkan kerentanan pada rantai build (`tar` melalui `bcrypt`, `vite`). Dependensi tidak diperbarui secara besar-besaran menjelang pengumpulan untuk menghindari regresi; temuan ini berada di toolchain build, bukan di jalur permintaan API.
+- **Tanpa pengujian otomatis.** Pengujian dilakukan manual (Swagger, `api.http`, skenario demo).
 
 ## Skenario demo 5 menit
 

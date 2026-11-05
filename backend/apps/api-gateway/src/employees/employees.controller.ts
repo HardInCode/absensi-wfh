@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -16,6 +17,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import {
+  AuthUser,
   CreateEmployeeDto,
   EmployeeListResponseDto,
   EmployeeResponseDto,
@@ -24,6 +26,7 @@ import {
   UpdateEmployeeDto,
 } from '@app/common';
 import { EmployeeServiceClient } from '../clients/employee-service.client';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 
 @ApiTags('employees')
@@ -54,15 +57,27 @@ export class EmployeesController {
   @Patch(':id')
   @ApiOkResponse({ type: EmployeeResponseDto })
   update(
+    @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateEmployeeDto,
   ) {
+    if (id === user.id) {
+      if ((dto.role !== undefined && dto.role !== Role.ADMIN_HRD) || dto.isActive === false) {
+        throw new BadRequestException('Anda tidak dapat mengubah peran atau menonaktifkan akun sendiri.');
+      }
+    }
     return this.employees.update(id, dto);
   }
 
   @Delete(':id')
   @ApiOkResponse({ type: EmployeeResponseDto, description: 'Soft delete (isActive=false)' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
+  remove(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    if (id === user.id) {
+      throw new BadRequestException('Anda tidak dapat mengubah peran atau menonaktifkan akun sendiri.');
+    }
     return this.employees.remove(id);
   }
 }
