@@ -9,31 +9,51 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePagedQuery } from "@/hooks/usePagedQuery";
-import { fetchEmployees, ROLE_LABEL, type Employee } from "@/lib/hrdApi";
+import {
+  fetchEmployees,
+  ROLE_LABEL,
+  type ActiveStatusFilter,
+  type Employee,
+  type RoleFilter,
+} from "@/lib/hrdApi";
 
 const PAGE_SIZE = 10;
 
 export function EmployeesPage() {
   const { user } = useAuth();
   const [searchInput, setSearchInput] = useState("");
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("");
+  const [statusFilter, setStatusFilter] = useState<ActiveStatusFilter>("all");
   const search = useDebouncedValue(searchInput.trim(), 400);
 
-  // Halaman otomatis kembali ke 1 saat kata kunci berubah, tanpa fetch ganda.
-  const [pageState, setPageState] = useState({ search: "", page: 1 });
-  const page = pageState.search === search ? pageState.page : 1;
+  const hasFilters = Boolean(searchInput || roleFilter || statusFilter !== "all");
+  const filterKey = `${search}|${roleFilter}|${statusFilter}`;
+
+  // Halaman otomatis kembali ke 1 saat filter berubah, tanpa fetch ganda.
+  const [pageState, setPageState] = useState({ key: "", page: 1 });
+  const page = pageState.key === filterKey ? pageState.page : 1;
 
   const { data, isLoading, error, reload } = usePagedQuery(fetchEmployees, {
     page,
     limit: PAGE_SIZE,
     search,
+    role: roleFilter,
+    status: statusFilter,
   });
 
   const [formTarget, setFormTarget] = useState<{ employee: Employee | null } | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<Employee | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const dismissBanner = useCallback(() => setBanner(null), []);
+
+  function resetFilters() {
+    setSearchInput("");
+    setRoleFilter("");
+    setStatusFilter("all");
+  }
 
   const columns: Column<Employee>[] = [
     {
@@ -104,13 +124,13 @@ export function EmployeesPage() {
     },
   ];
 
-  const emptyContent = search
+  const emptyContent = hasFilters
     ? {
         title: "Tidak ada karyawan yang cocok",
-        description: `Tidak ada hasil untuk "${search}". Periksa ejaan atau coba kata kunci lain.`,
+        description: "Ubah kata kunci pencarian, sesuaikan filter peran atau status, atau reset filter untuk melihat semua data.",
         action: (
-          <Button variant="secondary" onClick={() => setSearchInput("")} className="min-h-11 sm:min-h-0">
-            Hapus pencarian
+          <Button variant="secondary" onClick={resetFilters} className="min-h-11 sm:min-h-0">
+            Reset filter
           </Button>
         ),
       }
@@ -140,19 +160,58 @@ export function EmployeesPage() {
 
       <StatusBanner message={banner} onDismiss={dismissBanner} />
 
-      <div className="max-w-md space-y-1.5">
-        <Label htmlFor="employee-search">Cari karyawan</Label>
-        <div className="relative">
-          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <Input
-            id="employee-search"
-            type="search"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Nama, NIK, atau email"
-            className="pl-9"
-            autoComplete="off"
-          />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_auto] lg:items-end">
+        <div className="space-y-1.5">
+          <Label htmlFor="employee-search">Cari karyawan</Label>
+          <div className="relative">
+            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Input
+              id="employee-search"
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Nama, NIK, atau email"
+              className="pl-9"
+              autoComplete="off"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="role-filter">Peran</Label>
+          <Select
+            id="role-filter"
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value as RoleFilter)}
+          >
+            <option value="">Semua peran</option>
+            <option value="EMPLOYEE">Karyawan</option>
+            <option value="ADMIN_HRD">Admin HRD</option>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="status-filter">Status</Label>
+          <Select
+            id="status-filter"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as ActiveStatusFilter)}
+          >
+            <option value="all">Semua status</option>
+            <option value="active">Aktif</option>
+            <option value="inactive">Nonaktif</option>
+          </Select>
+        </div>
+
+        <div>
+          <Button
+            variant="secondary"
+            onClick={resetFilters}
+            disabled={!hasFilters}
+            className="min-h-11 w-full sm:min-h-0 lg:w-auto"
+          >
+            Reset filter
+          </Button>
         </div>
       </div>
 
@@ -165,7 +224,7 @@ export function EmployeesPage() {
         error={error}
         onRetry={reload}
         meta={data?.meta ?? null}
-        onPage={(next) => setPageState({ search, page: next })}
+        onPage={(next) => setPageState({ key: filterKey, page: next })}
         empty={emptyContent}
       />
 

@@ -230,19 +230,29 @@ export async function getExportErrorMessage(error: unknown): Promise<string> {
   return getErrorMessage(error, "Gagal mengekspor CSV. Coba lagi.");
 }
 
+export type RoleFilter = Role | "";
+export type ActiveStatusFilter = "all" | "active" | "inactive";
+
 export interface EmployeeQuery {
   page: number;
   limit: number;
   search: string;
+  role?: RoleFilter;
+  status?: ActiveStatusFilter;
 }
 
 export async function fetchEmployees(query: EmployeeQuery, signal?: AbortSignal): Promise<Paged<Employee>> {
+  const params: Record<string, unknown> = {
+    page: query.page,
+    limit: query.limit,
+  };
+  if (query.search) params.search = query.search;
+  if (query.role) params.role = query.role;
+  if (query.status === "active") params.isActive = true;
+  if (query.status === "inactive") params.isActive = false;
+
   const res = await api.get("/employees", {
-    params: {
-      page: query.page,
-      limit: query.limit,
-      ...(query.search ? { search: query.search } : {}),
-    },
+    params,
     signal,
   });
   return normalizePaged(res.data, normalizeEmployee, query.limit);
