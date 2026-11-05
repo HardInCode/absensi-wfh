@@ -198,7 +198,14 @@ Content-Type: application/json
 ###############################################################################
 
 ### Kirim absen (multipart: photo wajib, notes opsional)
-# Waktu TIDAK dikirim: server yang menentukan. Satu absen per hari (kedua = 409).
+# Catatan perilaku & penolakan:
+# 1. Waktu TIDAK dikirim dari klien: server yang menentukan jam check-in (WIB).
+# 2. Satu absen per hari: jika karyawan yang sama mencoba absen kedua kali pada hari
+#    yang sama, request akan ditolak dengan HTTP 409 Conflict ("Anda sudah melakukan absensi hari ini").
+# 3. Deteksi duplikat foto (SHA-256): jika file/berkas foto yang sama persis diunggah ulang
+#    (baik oleh karyawan yang sama di hari lain maupun karyawan lain), request akan ditolak
+#    dengan HTTP 400 Bad Request ("Foto ini sudah pernah digunakan. Ambil foto baru.")
+#    dan file fisik yang sempat terunggah langsung di-rollback (dihapus).
 # @name submitAttendance
 POST {{baseUrl}}/attendances
 Authorization: Bearer {{employeeToken}}
@@ -344,3 +351,4 @@ GET {{baseUrl}}/attendances/{{attendanceId}}/photo
 ### Id bukan UUID - harapkan 400
 GET {{baseUrl}}/attendances/bukan-uuid/photo
 Authorization: Bearer {{adminToken}}
+

@@ -181,6 +181,18 @@ VITE_API_URL=http://localhost:3000/api
 - Swagger: <http://localhost:3000/api/docs>.
 - `api.http` di root berisi kumpulan request siap pakai (ekstensi VS Code *REST Client*).
 
+#### Nilai default pengaturan absensi (`attendance_settings`, ID = 1)
+
+Saat `attendance-service` dijalankan pertama kali, baris `id = 1` dibuat otomatis dengan konfigurasi default dari `DEFAULT_ATTENDANCE_SETTINGS` (terverifikasi sama pada database MySQL):
+
+| Parameter | Kolom database | Nilai default | Keterangan |
+|---|---|---|---|
+| Jam paling awal | `earliest_check_in` | `00:00` | Absen dapat dilakukan mulai pukul 00:00 WIB |
+| Batas jam masuk | `default_cutoff_time` | `08:00` | Batas masuk kerja dasar pukul 08:00 WIB |
+| Toleransi keterlambatan | `tolerance_minutes` | `15` | Terlambat dihitung jika absen lewat 08:15 WIB |
+| Wajib catatan jika terlambat | `require_note_when_late` | `false` (`0`) | Pengisian catatan bersifat opsional |
+| Hari kerja | `working_days` | `[0, 1, 2, 3, 4, 5, 6]` | Berlaku setiap hari (Minggu s/d Sabtu) |
+
 ### Mereset data
 
 ```bash
@@ -220,6 +232,48 @@ Semua path berawalan `/api`. Autentikasi memakai header `Authorization: Bearer <
 | GET | `/attendances` | ADMIN_HRD | Daftar absensi semua karyawan dengan filter dan paginasi |
 | GET | `/attendances/:id/photo` | Pemilik absen atau ADMIN_HRD | Stream biner foto (`image/jpeg`, `image/png`, `image/webp`) |
 
+### Parameter query untuk `GET /attendances` dan `GET /attendances/export`
+
+Keduanya menggunakan DTO query yang sama (`QueryAttendancesDto` dan `ExportAttendancesQueryDto` di API Gateway). `GET /attendances` mendukung paginasi data, sedangkan `GET /attendances/export` tidak memakai paginasi (mengambil semua data yang cocok hingga batas 5.000 baris):
+
+| Parameter | Tipe / Format | Bawaan | Keterangan |
+|---|---|---|---|
+| `dateFrom` | String (`YYYY-MM-DD`) | - | Tanggal awal filter (WIB). Alias kompatibilitas frontend: `date_from` |
+| `dateTo` | String (`YYYY-MM-DD`) | - | Tanggal akhir filter (WIB). Alias kompatibilitas frontend: `date_to` |
+| `search` | String (maks 100 karakter) | - | Pencarian nama atau NIK karyawan. Alias: `employee_name` |
+| `employeeId` | String UUID | - | Filter ke satu karyawan tertentu |
+| `status` | Enum (`ON_TIME` atau `LATE`) | - | Filter status keterlambatan absensi |
+| `page` | Integer (min: 1) | `1` | Nomor halaman (hanya untuk `GET /attendances`) |
+| `limit` | Integer (min: 1, maks: 100) | `10` | Jumlah baris per halaman (hanya untuk `GET /attendances`) |
+
+### Catatan perilaku
+
+1. **Perubahan Pengaturan (`PATCH /attendances/settings`):**
+   - Mendukung pembaruan parsial (`UpdateAttendanceSettingsDto`). Field yang dikirim divalidasi ketat:
+     - `earliestCheckIn`: Jam paling awal absen dibuka, format `HH:mm` 24 jam (`00:00` - `23:59` WIB).
+     - `defaultCutoffTime`: Batas jam masuk kerja dasar, format `HH:mm` 24 jam (`00:00` - `23:59` WIB).
+     - `toleranceMinutes`: Toleransi keterlambatan dalam menit (bilangan bulat 0 sampai 120).
+     - `requireNoteWhenLate`: Boolean (`true` atau `false`), menentukan apakah catatan wajib diisi saat terlambat.
+     - `workingDays`: Array angka hari kerja (`0` = Minggu s/d `6` = Sabtu). Minimal 1 hari (`ArrayMinSize(1)`), maksimal 7 hari (`ArrayMaxSize(7)`), dan tidak boleh duplikat (`ArrayUnique`).
+2. **Ekspor CSV (`GET /attendances/export`):**
+   - **Batas Baris:** Dibatasi maksimal 5.000 baris (`EXPORT_MAX_ROWS = 5000`).
+   - **Header Respons:**
+     - `Content-Disposition: attachment; filename="rekap-absensi-wfh-YYYY-MM-DD.csv"`
+     - `X-Export-Truncated: true|false` (bernilai `true` jika data yang cocok di database melebihi 5.000 baris, diekspos lewat CORS agar dapat dibaca frontend).
+   - **Format & Kolom CSV:** Kolom persisnya adalah `NIK, Nama Karyawan, Tanggal, Jam (WIB), Status, Keterlambatan (Menit), Catatan`.
+   - **Format File:** Diawali UTF-8 BOM (`\uFEFF`) agar terbaca otomatis dengan rapi tanpa masalah karakter di Excel, dengan pemisah baris CRLF (`\r\n` sesuai RFC 4180).
+   - **Sanitasi CSV Injection:** Seluruh nilai sel teks yang diawali karakter formula `= + - @ \t \r` secara otomatis dinetralkan dengan prefiks tanda kutip tunggal/apostrof `'` (`sanitizeCsvText` pada `csv.util.ts`) demi mencegah eksekusi formula berbahaya saat berkas dibuka di spreadsheet. Sel yang memuat koma, kutip dua, atau baris baru dibungkus tanda kutip ganda `"` dengan kutip di dalamnya digandakan (`""`).
+3. **Ringkasan Harian (`GET /attendances/summary`):**
+   - Populasi total (`totalEmployees`) hanya menghitung karyawan aktif ber-role `EMPLOYEE` (`findActiveStaff()`), akun `ADMIN_HRD` tidak dihitung.
+   - Field yang dikembalikan (`AttendanceSummaryView`):
+     - `date`: Tanggal summary (`YYYY-MM-DD` WIB, bawaan hari ini).
+     - `totalEmployees`: Total karyawan aktif yang wajib absen.
+     - `presentCount`: Jumlah karyawan yang sudah absen pada tanggal tersebut.
+     - `onTimeCount`: Jumlah karyawan yang absen tepat waktu (`ON_TIME`).
+     - `lateCount`: Jumlah karyawan yang absen terlambat (`LATE`).
+     - `absentCount`: Jumlah karyawan yang belum absen (`totalEmployees - presentCount`).
+     - `absentEmployees`: Daftar karyawan yang belum absen (`[{ id, fullName, nik }]`).
+
 ## Keputusan desain dan alasannya
 
 1. **Waktu absen selalu dari server.** Gateway tidak menerima waktu dari klien. `attendance-service` membangkitkan `checkInAt` dan menurunkan `attendanceDate` (tanggal kalender WIB) di sisi server. Jam digital di halaman karyawan hanya tampilan yang disinkronkan ke `GET /api/time` (koreksi setengah RTT, sinkron ulang tiap 5 menit); stempel pada pratinjau foto berlabel "Pratinjau" dan bukan waktu resmi. Alasannya: jam perangkat klien mudah dimanipulasi, sedangkan catatan kehadiran harus akuntabel.
@@ -233,14 +287,26 @@ Semua path berawalan `/api`. Autentikasi memakai header `Authorization: Bearer <
 9. **Satu absen per hari.** Dijamin oleh constraint database `UNIQUE (employee_id, attendance_date)`. Usaha absen kedua menghasilkan konflik HTTP 409.
 10. **Pencarian Master Karyawan Lengkap.** Mendukung pencarian kata kunci multi-field (Nama, NIK, Email, dan Jabatan) serta filter dropdown untuk Peran dan Status Keaktifan.
 
+## Batasan yang diketahui dan rencana pengembangan
+
+- **Tanpa check-out.** Aplikasi hanya mencatat jam masuk. Pengembangan: kolom `check_out_at` dan durasi kerja.
+- **Tanpa jadwal shift, izin, dan cuti.** Hanya ada satu aturan jam masuk global plus `workingDays`. Karyawan yang izin akan tampil sebagai "Belum absen" pada kartu ringkasan, dan jam masuk tidak bisa berbeda per hari.
+- **Isi foto tidak diverifikasi otomatis.** Server memeriksa tipe berkas, ukuran, dan duplikat (SHA-256), tetapi tidak memeriksa apakah foto benar-benar menampilkan karyawan yang sedang bekerja. Pengembangan: deteksi wajah dan liveness. HRD tetap bisa meninjau foto secara manual.
+- **Kamera hanya berjalan di `localhost` atau HTTPS.** Jika frontend diakses lewat HTTP dari alamat IP jaringan, karyawan memakai unggah berkas.
+- **Peran admin tingkat atas belum ada.** Semua `ADMIN_HRD` setara, termasuk dalam mengubah pengaturan absensi. Pengembangan: peran super admin dan log audit.
+- **Docker Compose belum terpadu.** `docker-compose.yml` hanya menjalankan MySQL; backend dan frontend dijalankan lewat npm. Folder `uploads/` belum menjadi Docker volume.
+- **Skema dibuat dengan `synchronize`.** Praktis untuk pengembangan, berisiko di produksi. Pengembangan: migrasi TypeORM.
+- **Export dibatasi 5.000 baris.** Data lebih banyak terpotong dan ditandai header `X-Export-Truncated: true`.
+- **Pencarian nama pada monitoring mencakup semua role**, tidak hanya karyawan.
+
 ## Skenario demo 5 menit
 
-1. **0:00 (HRD):** Login sebagai `admin@company.test`. Buka **Master karyawan**, coba cari karyawan berdasarkan nama atau jabatan (mis. *"QA"* atau *"Engineer"*), lalu tambah karyawan baru.
-2. **1:00 (HRD):** Buka tab **Pengaturan absensi**. Atur batas jam masuk lebih awal dari jam saat ini, aktifkan opsi **wajib catatan jika terlambat**, lalu simpan.
-3. **1:45 (Karyawan):** Buka jendela samaran, login sebagai `budi@company.test`. Perhatikan jam digital tersinkron server dan keterangan batas jam masuk.
-4. **2:15 (Karyawan):** Ambil foto langsung dari kamera atau unggah berkas, coba kirim tanpa catatan (ditolak karena wajib catatan saat terlambat), lalu isi catatan dan kirim. Absen berhasil dengan badge **Terlambat**.
-5. **3:00 (Karyawan):** Coba absen kembali pada hari yang sama (ditolak dengan 409 konflik: sudah absen hari ini).
-6. **3:15 (HRD):** Kembali ke HRD, buka **Monitoring absensi**. Periksa kartu ringkasan harian (Total Karyawan, Hadir, Tepat Waktu, Terlambat, Belum Absen).
+1. **0:00 (HRD):** Login sebagai `admin@company.test`. Buka **Master karyawan**, coba cari karyawan berdasarkan nama atau jabatan (mis. *"QA"* atau *"Engineer"*), lalu tambah satu karyawan baru: **Sari Demo** (`sari@company.test`, kata sandi `Karyawan123!`, NIK `2000000099`, jabatan `Staff Operasional`, role `EMPLOYEE`). Akun baru ini yang akan digunakan untuk demo absen (karena akun demo Budi mungkin sudah memiliki data absensi hari ini dari seed atau uji coba sebelumnya).
+2. **1:00 (HRD):** Buka tab **Pengaturan absensi**. Atur batas jam masuk lebih awal dari jam saat ini (mis. 2-3 jam sebelum jam saat ini), aktifkan opsi **wajib catatan jika terlambat**, lalu simpan.
+3. **1:45 (Karyawan):** Buka jendela penyamaran (*incognito*), login sebagai karyawan baru yang dibuat di langkah 1 (**`sari@company.test`** / `Karyawan123!`) — bukan Budi, untuk menghindari bentrok bila Budi sudah absen hari ini. Perhatikan jam digital tersinkron server dan keterangan batas jam masuk.
+4. **2:15 (Karyawan - Sari Demo):** Ambil foto langsung dari kamera (webcam) atau unggah berkas, coba kirim tanpa catatan (ditolak karena catatan wajib jika terlambat), lalu isi catatan dan kirim. Absen berhasil dengan badge **Terlambat (+X mnt)**.
+5. **3:00 (Karyawan - Sari Demo):** Coba absen kembali pada hari yang sama (ditolak dengan 409 Conflict: Anda sudah melakukan absensi hari ini).
+6. **3:15 (HRD):** Kembali ke jendela HRD, buka **Monitoring absensi**. Periksa kartu ringkasan harian (Total Karyawan, Hadir, Tepat Waktu, Terlambat, Belum Absen) yang langsung ter-update dengan absensi Sari Demo.
 7. **3:45 (HRD):** Gunakan filter status **Terlambat**, klik foto untuk memperbesar lewat dialog terproteksi.
 8. **4:15 (HRD):** Klik **Export CSV**, berkas `rekap-absensi-wfh-YYYY-MM-DD.csv` terunduh dengan format rapi dan UTF-8 BOM.
 9. **4:45 (HRD):** Akses dokumentasi interaktif Swagger di <http://localhost:3000/api/docs>.
