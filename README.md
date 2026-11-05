@@ -12,13 +12,14 @@ Zona waktu aplikasi: **Asia/Jakarta (WIB)**.
 1. [Arsitektur](#arsitektur)
 2. [Tech stack](#tech-stack)
 3. [Prasyarat](#prasyarat)
-4. [Menjalankan secara lokal dari nol](#menjalankan-secara-lokal-dari-nol)
-5. [Akun demo](#akun-demo)
-6. [Daftar endpoint](#daftar-endpoint)
-7. [Keputusan desain dan alasannya](#keputusan-desain-dan-alasannya)
-8. [Batasan yang diketahui dan rencana pengembangan](#batasan-yang-diketahui-dan-rencana-pengembangan)
-9. [Skenario demo 5 menit](#skenario-demo-5-menit)
-10. [Dokumen terkait](#dokumen-terkait)
+4. [Menjalankan dengan Docker (semua service)](#menjalankan-dengan-docker-semua-service)
+5. [Menjalankan secara lokal dari nol](#menjalankan-secara-lokal-dari-nol)
+6. [Akun demo](#akun-demo)
+7. [Daftar endpoint](#daftar-endpoint)
+8. [Keputusan desain dan alasannya](#keputusan-desain-dan-alasannya)
+9. [Batasan yang diketahui dan rencana pengembangan](#batasan-yang-diketahui-dan-rencana-pengembangan)
+10. [Skenario demo 5 menit](#skenario-demo-5-menit)
+11. [Dokumen terkait](#dokumen-terkait)
 
 ## Arsitektur
 
@@ -95,6 +96,38 @@ Pembagian kepemilikan data:
 - **Docker** dan Docker Compose (untuk MySQL 8).
 - Port yang harus bebas: `3306` (MySQL), `3000` (gateway), `3001` dan `3002` (TCP internal), `5173` (frontend).
 
+## Menjalankan dengan Docker (semua service)
+
+Prasyarat: Docker + Docker Compose v2.
+
+```bash
+cp .env.example .env        # lalu ubah password dan JWT_SECRET (min 32 karakter)
+docker compose up --build
+```
+
+Urutan otomatis: `mysql` → `employee-service` → `attendance-service` → `api-gateway` + `seed` → `frontend`.
+Akun demo dibuat oleh service `seed` (sekali-jalan, idempoten).
+
+| Akses | URL |
+|---|---|
+| Aplikasi | http://localhost:8080 |
+| Swagger | http://localhost:8080/api/docs (atau http://localhost:3000/api/docs) |
+
+Akun demo: `admin@company.test` / `Admin123!` (ADMIN_HRD), `budi@company.test` / `Karyawan123!` (EMPLOYEE).
+
+Perintah berguna:
+```bash
+docker compose logs -f api-gateway
+docker compose run --rm seed     # jalankan ulang seeder (aman, tidak menduplikasi)
+docker compose down              # hentikan, data & foto TETAP ada
+docker compose down -v           # hentikan + HAPUS database dan foto
+```
+
+Data persisten ada di named volume `mysql_data` (database) dan `uploads_data` (foto, di `/app/uploads` pada `api-gateway`).
+
+Alur lokal tanpa Docker tetap berlaku: `docker compose up -d mysql` (dari root, butuh `.env` di root),
+lalu `npm run start:dev`, `npm run seed` (di `backend/`), dan `npm run dev` (di `frontend/`). Jangan jalankan keduanya bersamaan (port 3000/3306 bentrok).
+
 ## Menjalankan secara lokal dari nol
 
 Seluruh perintah dijalankan dari root repositori kecuali disebutkan lain.
@@ -102,7 +135,7 @@ Seluruh perintah dijalankan dari root repositori kecuali disebutkan lain.
 ### 1. Jalankan MySQL
 
 ```bash
-docker compose up -d
+docker compose up -d mysql
 docker compose ps        # tunggu sampai absensi-mysql berstatus healthy
 ```
 
@@ -294,7 +327,6 @@ Keduanya menggunakan DTO query yang sama (`QueryAttendancesDto` dan `ExportAtten
 - **Isi foto tidak diverifikasi otomatis.** Server memeriksa tipe berkas, ukuran, dan duplikat (SHA-256), tetapi tidak memeriksa apakah foto benar-benar menampilkan karyawan yang sedang bekerja. Pengembangan: deteksi wajah dan liveness. HRD tetap bisa meninjau foto secara manual.
 - **Kamera hanya berjalan di `localhost` atau HTTPS.** Jika frontend diakses lewat HTTP dari alamat IP jaringan, karyawan memakai unggah berkas.
 - **Peran admin tingkat atas belum ada.** Semua `ADMIN_HRD` setara, termasuk dalam mengubah pengaturan absensi. Pengembangan: peran super admin dan log audit.
-- **Docker Compose belum terpadu.** `docker-compose.yml` hanya menjalankan MySQL; backend dan frontend dijalankan lewat npm. Folder `uploads/` belum menjadi Docker volume.
 - **Skema dibuat dengan `synchronize`.** Praktis untuk pengembangan, berisiko di produksi. Pengembangan: migrasi TypeORM.
 - **Export dibatasi 5.000 baris.** Data lebih banyak terpotong dan ditandai header `X-Export-Truncated: true`.
 - **Pencarian nama pada monitoring mencakup semua role**, tidak hanya karyawan.
@@ -304,6 +336,15 @@ Keduanya menggunakan DTO query yang sama (`QueryAttendancesDto` dan `ExportAtten
 - **`JWT_SECRET` pada `.env.example` hanya contoh.** Ganti dengan string acak sebelum dipakai di luar pengembangan.
 - **Audit dependensi.** `npm audit` melaporkan kerentanan pada rantai build (`tar` melalui `bcrypt`, `vite`). Dependensi tidak diperbarui secara besar-besaran menjelang pengumpulan untuk menghindari regresi; temuan ini berada di toolchain build, bukan di jalur permintaan API.
 - **Tanpa pengujian otomatis.** Pengujian dilakukan manual (Swagger, `api.http`, skenario demo).
+
+## Batasan (terkait Docker)
+
+- `DB_SYNCHRONIZE=true` membuat tabel otomatis; start dibuat berurutan untuk menghindari race DDL. Untuk produksi ganti dengan migrasi TypeORM.
+- Port service TCP (3001/3002) tidak dipublikasikan ke host; hanya terjangkau di jaringan Docker.
+- Image backend memuat devDependencies (untuk seeder `ts-node`), sehingga ukurannya lebih besar dari image produksi minimal.
+- Di Docker Desktop (Windows/macOS) IP klien di rate limit bisa terlihat sebagai IP gateway NAT Docker; di Linux IP asli terbaca.
+- Perubahan password/DB di `.env` tidak berlaku pada volume `mysql_data` yang sudah ada (gunakan `docker compose down -v`).
+- Belum ada HTTPS; token masih di `localStorage`.
 
 ## Skenario demo 5 menit
 
@@ -321,5 +362,7 @@ Keduanya menggunakan DTO query yang sama (`QueryAttendancesDto` dan `ExportAtten
 ## Dokumen terkait
 
 - [`docs/erd.md`](docs/erd.md): ERD dan batas kepemilikan tabel antar service.
+- [`docs/audit-keamanan.md`](docs/audit-keamanan.md): Laporan audit keamanan komprehensif backend dan frontend.
+- [`docs/tindak-lanjut-keamanan.md`](docs/tindak-lanjut-keamanan.md): Rangkuman penguatan keamanan yang telah diimplementasikan.
 - [`api.http`](api.http): Koleksi request lengkap untuk ekstensi REST Client (VS Code).
-- Swagger UI: `http://localhost:3000/api/docs` saat gateway berjalan.
+- Swagger UI: `http://localhost:3000/api/docs` (atau `http://localhost:8080/api/docs` via Docker) saat gateway berjalan.
