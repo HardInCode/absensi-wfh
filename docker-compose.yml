@@ -1,3 +1,15 @@
+x-backend-build: &backend-build
+  context: ./backend
+  dockerfile: Dockerfile
+
+x-db-env: &db-env
+  DB_HOST: mysql
+  DB_PORT: "3306"
+  DB_NAME: ${DB_NAME:-absensi_wfh}
+  DB_USER: ${DB_USER:-absensi_user}
+  DB_PASSWORD: ${DB_PASSWORD:?Isi DB_PASSWORD di file .env (salin dari .env.example)}
+  DB_SYNCHRONIZE: ${DB_SYNCHRONIZE:-true}
+
 services:
   mysql:
     image: mysql:8.0
@@ -8,20 +20,152 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: absensi_wfh
-      MYSQL_USER: absensi_user
-      MYSQL_PASSWORD: absensi_pass
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Isi MYSQL_ROOT_PASSWORD di file .env (salin dari .env.example)}
+      MYSQL_DATABASE: ${DB_NAME:-absensi_wfh}
+      MYSQL_USER: ${DB_USER:-absensi_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Isi DB_PASSWORD di file .env (salin dari .env.example)}
       TZ: Asia/Jakarta
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-prootpass"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 20s
+
+  employee-service:
+    build: *backend-build
+    image: absensi-backend:latest
+    container_name: absensi-employee-service
+    restart: unless-stopped
+    init: true
+    command: ["node", "dist/apps/employee-service/main"]
+    environment:
+      <<: *db-env
+      NODE_ENV: production
+      TZ: Asia/Jakarta
+      # Bind ke semua interface DI DALAM jaringan Docker; port tidak dipublikasikan ke host.
+      EMPLOYEE_SERVICE_HOST: 0.0.0.0
+      EMPLOYEE_SERVICE_PORT: "3001"
+      JWT_SECRET: ${JWT_SECRET:?Isi JWT_SECRET (min 32 karakter) di file .env}
+      JWT_EXPIRES_IN_SECONDS: ${JWT_EXPIRES_IN_SECONDS:-28800}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-10}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('net').connect(3001,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  attendance-service:
+    build: *backend-build
+    image: absensi-backend:latest
+    container_name: absensi-attendance-service
+    restart: unless-stopped
+    init: true
+    command: ["node", "dist/apps/attendance-service/main"]
+    environment:
+      <<: *db-env
+      NODE_ENV: production
+      TZ: Asia/Jakarta
+      ATTENDANCE_SERVICE_HOST: 0.0.0.0
+      ATTENDANCE_SERVICE_PORT: "3002"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      # Serialisasi: cegah dua service menjalankan DDL synchronize bersamaan.
+      employee-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('net').connect(3002,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  api-gateway:
+    build: *backend-build
+    image: absensi-backend:latest
+    container_name: absensi-api-gateway
+    restart: unless-stopped
+    init: true
+    command: ["node", "dist/apps/api-gateway/main"]
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Jakarta
+      TRUST_PROXY: "true"
+      GATEWAY_PORT: "3000"
+      FRONTEND_URL: http://localhost:${FRONTEND_PORT:-8080}
+      RPC_TIMEOUT_MS: "5000"
+      EMPLOYEE_SERVICE_HOST: employee-service
+      EMPLOYEE_SERVICE_PORT: "3001"
+      ATTENDANCE_SERVICE_HOST: attendance-service
+      ATTENDANCE_SERVICE_PORT: "3002"
+      UPLOAD_DIR: /app/uploads
+      JWT_SECRET: ${JWT_SECRET:?Isi JWT_SECRET (min 32 karakter) di file .env}
+    volumes:
+      - uploads_data:/app/uploads
+    # Hanya untuk Swagger/REST Client dari host. Hapus baris ports ini jika tidak perlu.
+    ports:
+      - "127.0.0.1:${GATEWAY_PORT:-3000}:3000"
+    depends_on:
+      employee-service:
+        condition: service_healthy
+      attendance-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/time').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # Sekali-jalan: membuat akun demo (idempoten). Jalan setelah tabel employees ada.
+  seed:
+    build: *backend-build
+    image: absensi-backend:latest
+    container_name: absensi-seed
+    restart: "no"
+    command: ["npm", "run", "seed"]
+    environment:
+      <<: *db-env
+      NODE_ENV: production
+      TZ: Asia/Jakarta
+      EMPLOYEE_SERVICE_HOST: 0.0.0.0
+      EMPLOYEE_SERVICE_PORT: "3001"
+      JWT_SECRET: ${JWT_SECRET:?Isi JWT_SECRET (min 32 karakter) di file .env}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-10}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      employee-service:
+        condition: service_healthy
+      attendance-service:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    image: absensi-frontend:latest
+    container_name: absensi-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
 
 volumes:
   mysql_data:
+  uploads_data:

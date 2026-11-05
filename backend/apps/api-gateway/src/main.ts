@@ -1,13 +1,21 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { ApiGatewayModule } from './api-gateway.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(ApiGatewayModule);
+  const app = await NestFactory.create<NestExpressApplication>(ApiGatewayModule);
   const config = app.get(ConfigService);
+
+  // Di belakang reverse proxy (Nginx di Docker), baca IP klien asli dari X-Forwarded-For
+  // agar rate limit per-IP tidak menjadi satu bucket untuk semua pengguna.
+  // Default mati: alur lokal tanpa proxy tidak berubah.
+  if (process.env.TRUST_PROXY === 'true') {
+    app.set('trust proxy', 1);
+  }
 
   app.setGlobalPrefix('api');
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
