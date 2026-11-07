@@ -21,10 +21,10 @@ const DEMO_ACCOUNTS = [
   },
   {
     nik: '2000000001',
-    fullName: 'Budi Santoso',
-    email: 'budi@company.test',
+    fullName: 'Hirdan',
+    email: 'hirdan@company.test',
     password: 'Karyawan123!',
-    position: 'Software Engineer',
+    position: 'Software Developer',
     role: Role.EMPLOYEE,
   },
 ];

@@ -23,7 +23,7 @@ const HIGHLIGHTS = [
 
 const DEMO_ACCOUNTS = [
   { label: 'Admin HRD', email: 'admin@company.test', password: 'Admin123!' },
-  { label: 'Karyawan', email: 'budi@company.test', password: 'Karyawan123!' },
+  { label: 'Karyawan', email: 'hirdan@company.test', password: 'Karyawan123!' },
 ];
 
 export default function LoginPage() {

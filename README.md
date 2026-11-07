@@ -113,7 +113,7 @@ Akun demo dibuat oleh service `seed` (sekali-jalan, idempoten).
 | Aplikasi | http://localhost:8080 |
 | Swagger | http://localhost:8080/api/docs (atau http://localhost:3000/api/docs) |
 
-Akun demo: `admin@company.test` / `Admin123!` (ADMIN_HRD), `budi@company.test` / `Karyawan123!` (EMPLOYEE).
+Akun demo: `admin@company.test` / `Admin123!` (ADMIN_HRD), `hirdan@company.test` / `Karyawan123!` (EMPLOYEE).
 
 Perintah berguna:
 ```bash
@@ -239,7 +239,7 @@ Hapus juga isi `backend/uploads/` (kecuali `.gitkeep`) agar bersih dari foto lam
 | Peran | Email | Kata sandi |
 |---|---|---|
 | Admin HRD (`ADMIN_HRD`) | `admin@company.test` | `Admin123!` |
-| Karyawan (`EMPLOYEE`) | `budi@company.test` | `Karyawan123!` |
+| Karyawan (`EMPLOYEE`) | `hirdan@company.test` | `Karyawan123!` |
 
 ## Daftar endpoint
 
@@ -348,9 +348,9 @@ Keduanya menggunakan DTO query yang sama (`QueryAttendancesDto` dan `ExportAtten
 
 ## Skenario demo 5 menit
 
-1. **0:00 (HRD):** Login sebagai `admin@company.test`. Buka **Master karyawan**, coba cari karyawan berdasarkan nama atau jabatan (mis. *"QA"* atau *"Engineer"*), lalu tambah satu karyawan baru: **Sari Demo** (`sari@company.test`, kata sandi `Karyawan123!`, NIK `2000000099`, jabatan `Staff Operasional`, role `EMPLOYEE`). Akun baru ini yang akan digunakan untuk demo absen (karena akun demo Budi mungkin sudah memiliki data absensi hari ini dari seed atau uji coba sebelumnya).
+1. **0:00 (HRD):** Login sebagai `admin@company.test`. Buka **Master karyawan**, coba cari karyawan berdasarkan nama atau jabatan (mis. *"QA"* atau *"Engineer"*), lalu tambah satu karyawan baru: **Sari Demo** (`sari@company.test`, kata sandi `Karyawan123!`, NIK `2000000099`, jabatan `Staff Operasional`, role `EMPLOYEE`). Akun baru ini yang akan digunakan untuk demo absen (karena akun demo Hirdan mungkin sudah memiliki data absensi hari ini dari seed atau uji coba sebelumnya).
 2. **1:00 (HRD):** Buka tab **Pengaturan absensi**. Atur batas jam masuk lebih awal dari jam saat ini (mis. 2-3 jam sebelum jam saat ini), aktifkan opsi **wajib catatan jika terlambat**, lalu simpan.
-3. **1:45 (Karyawan):** Buka jendela penyamaran (*incognito*), login sebagai karyawan baru yang dibuat di langkah 1 (**`sari@company.test`** / `Karyawan123!`) — bukan Budi, untuk menghindari bentrok bila Budi sudah absen hari ini. Perhatikan jam digital tersinkron server dan keterangan batas jam masuk.
+3. **1:45 (Karyawan):** Buka jendela penyamaran (*incognito*), login sebagai karyawan baru yang dibuat di langkah 1 (**`sari@company.test`** / `Karyawan123!`) — bukan Hirdan, untuk menghindari bentrok bila Hirdan sudah absen hari ini. Perhatikan jam digital tersinkron server dan keterangan batas jam masuk.
 4. **2:15 (Karyawan - Sari Demo):** Ambil foto langsung dari kamera (webcam) atau unggah berkas, coba kirim tanpa catatan (ditolak karena catatan wajib jika terlambat), lalu isi catatan dan kirim. Absen berhasil dengan badge **Terlambat (+X mnt)**.
 5. **3:00 (Karyawan - Sari Demo):** Coba absen kembali pada hari yang sama (ditolak dengan 409 Conflict: Anda sudah melakukan absensi hari ini).
 6. **3:15 (HRD):** Kembali ke jendela HRD, buka **Monitoring absensi**. Periksa kartu ringkasan harian (Total Karyawan, Hadir, Tepat Waktu, Terlambat, Belum Absen) yang langsung ter-update dengan absensi Sari Demo.
